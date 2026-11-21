@@ -1,0 +1,9 @@
+# Artefatos locais de verificação (scripts temporários, logs de build)
+.tmp-*.ps1
+/*-out.txt
+/webbuild.txt
+/tsc-out.txt
+
+# Sistema
+.DS_Store
+Thumbs.db

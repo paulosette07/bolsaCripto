@@ -1,0 +1,29 @@
+# dependências
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+
+# build
+/.next/
+/out/
+/build
+next-env.d.ts
+
+# ambiente — NUNCA commitar
+.env
+.env.local
+.env*.local
+.env.production
+
+# vercel
+.vercel
+
+# tipos gerados
+*.tsbuildinfo
+
+# sistema
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*

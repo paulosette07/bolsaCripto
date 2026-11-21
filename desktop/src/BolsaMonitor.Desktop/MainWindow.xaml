@@ -1,0 +1,150 @@
+﻿<Window x:Class="BolsaMonitor.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:BolsaMonitor.Desktop.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:ShellViewModel}"
+        Title="Bolsa Monitor"
+        Width="1240"
+        Height="820"
+        MinWidth="1060"
+        MinHeight="680"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource CanvasBrush}"
+        FontFamily="{StaticResource UiFont}">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="236" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Barra lateral -->
+        <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
+            <Grid Margin="14,18,14,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Orientation="Horizontal" Margin="6,0,0,22">
+                    <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource UpBrush}">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border Width="3" Height="8" CornerRadius="1.5" Background="{StaticResource UpDeepBrush}" Margin="1.5,5,0,0" />
+                            <Border Width="3" Height="12" CornerRadius="1.5" Background="{StaticResource UpDeepBrush}" Margin="1.5,0,0,0" />
+                            <Border Width="3" Height="16" CornerRadius="1.5" Background="#8C04140E" Margin="1.5,0,1.5,0" />
+                        </StackPanel>
+                    </Border>
+                    <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="Bolsa Monitor" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+                        <TextBlock Text="B3 + cripto" Style="{StaticResource Caption}" FontSize="10" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1">
+                    <ItemsControl ItemsSource="{Binding NavItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <RadioButton Style="{StaticResource NavButton}"
+                                             Content="{Binding Label}"
+                                             GroupName="main-nav"
+                                             IsChecked="{Binding IsActive, Mode=OneWay}"
+                                             Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                             CommandParameter="{Binding Key}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Grid.Row="3">
+                    <Border Style="{StaticResource Divider}" Margin="6,0,6,12" />
+
+                    <TextBlock Text="{Binding AlertStatus}"
+                               Style="{StaticResource Caption}"
+                               TextWrapping="Wrap"
+                               Margin="8,0,8,10" />
+
+                    <Grid Margin="6,0,6,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource SurfaceRaisedBrush}">
+                            <TextBlock Text="{Binding UserInitials}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource UpBrush}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+
+                        <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding UserName}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource InkBrush}"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding UserEmail}"
+                                       Style="{StaticResource Caption}"
+                                       FontSize="10"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Button Content="Sair"
+                            Style="{StaticResource GhostButton}"
+                            Command="{Binding SignOutCommand}"
+                            HorizontalAlignment="Left"
+                            Margin="2,10,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Conteúdo -->
+        <Grid Grid.Column="1" Margin="26,20,26,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <ContentControl Content="{Binding CurrentPage}" />
+
+            <!-- Toast de alerta -->
+            <Border Grid.Row="1"
+                    Background="{StaticResource SurfaceRaisedBrush}"
+                    BorderBrush="{StaticResource UpBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="12,9"
+                    Margin="0,14,0,0"
+                    Visibility="{Binding ToastMessage, Converter={StaticResource NullToVisible}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Text="{Binding ToastMessage}"
+                               FontSize="12"
+                               Foreground="{StaticResource InkBrush}"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center" />
+
+                    <Button Grid.Column="1"
+                            Content="×"
+                            Style="{StaticResource GhostButton}"
+                            Width="26"
+                            Height="26"
+                            Padding="0"
+                            FontSize="14"
+                            Command="{Binding DismissToastCommand}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

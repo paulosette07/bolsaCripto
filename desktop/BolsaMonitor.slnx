@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BolsaMonitor.Core.Tests/BolsaMonitor.Core.Tests.csproj" />
+    <Project Path="src/BolsaMonitor.Core/BolsaMonitor.Core.csproj" />
+    <Project Path="src/BolsaMonitor.Desktop/BolsaMonitor.Desktop.csproj" />
+  </Folder>
+</Solution>

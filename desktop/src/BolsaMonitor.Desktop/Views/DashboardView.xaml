@@ -1,0 +1,256 @@
+<UserControl x:Class="BolsaMonitor.Desktop.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+             xmlns:vm="clr-namespace:BolsaMonitor.Desktop.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:DashboardViewModel}"
+             Background="Transparent">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <StackPanel>
+
+            <Grid Margin="0,0,0,18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource PageTitle}" />
+                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource PageSubtitle}" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        Content="Atualizar"
+                        Style="{StaticResource SecondaryButton}"
+                        Command="{Binding RefreshCommand}"
+                        VerticalAlignment="Center" />
+            </Grid>
+
+            <Border Background="{StaticResource DownSoftBrush}"
+                    BorderBrush="#3A2020"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="12,10"
+                    Margin="0,0,0,14"
+                    Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVisible}}">
+                <TextBlock Text="{Binding ErrorMessage}"
+                           FontSize="12"
+                           Foreground="{StaticResource InkBrush}"
+                           TextWrapping="Wrap" />
+            </Border>
+
+            <UniformGrid Columns="3" Margin="0,0,0,14">
+                <Border Style="{StaticResource Card}" Margin="0,0,10,0">
+                    <StackPanel>
+                        <TextBlock Text="PATRIMÔNIO" Style="{StaticResource Caption}" />
+                        <TextBlock Text="{Binding TotalValueText}" Style="{StaticResource NumericLarge}" Margin="0,6,0,0" />
+                        <WrapPanel Margin="0,6,0,0">
+                            <TextBlock Text="{Binding DayChangeText}"
+                                       FontFamily="{StaticResource NumericFont}"
+                                       FontSize="11"
+                                       Foreground="{Binding DayChangePercent, Converter={StaticResource ChangeBrush}}" />
+                            <TextBlock Text="{Binding DayChangePercent, Converter={StaticResource Percent}}"
+                                       FontFamily="{StaticResource NumericFont}"
+                                       FontSize="11"
+                                       Margin="6,0,0,0"
+                                       Foreground="{Binding DayChangePercent, Converter={StaticResource ChangeBrush}}" />
+                            <TextBlock Text=" hoje" Style="{StaticResource Caption}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Margin="5,0,5,0">
+                    <StackPanel>
+                        <TextBlock Text="RESULTADO" Style="{StaticResource Caption}" />
+                        <TextBlock Text="{Binding ProfitText}"
+                                   Style="{StaticResource NumericLarge}"
+                                   Margin="0,6,0,0"
+                                   Foreground="{Binding ProfitPercent, Converter={StaticResource ProfitBrush}}" />
+                        <WrapPanel Margin="0,6,0,0">
+                            <TextBlock Text="{Binding ProfitPercent, Converter={StaticResource NullablePercent}}"
+                                       FontFamily="{StaticResource NumericFont}"
+                                       FontSize="11"
+                                       Foreground="{Binding ProfitPercent, Converter={StaticResource ProfitBrush}}" />
+                            <TextBlock Text=" sobre o custo" Style="{StaticResource Caption}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Margin="10,0,0,0">
+                    <StackPanel>
+                        <TextBlock Text="CARTEIRA" Style="{StaticResource Caption}" />
+                        <TextBlock Text="{Binding PositionsCount}" Style="{StaticResource NumericLarge}" Margin="0,6,0,0" />
+                        <WrapPanel Margin="0,6,0,0">
+                            <TextBlock Text="{Binding ActiveAlertsCount}" Style="{StaticResource Numeric}" FontSize="11" />
+                            <TextBlock Text=" alertas ativos" Style="{StaticResource Caption}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                <StackPanel>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding FeaturedTicker}"
+                                           Style="{StaticResource SectionTitle}"
+                                           FontSize="16" />
+                                <Border Background="{StaticResource SurfaceRaisedBrush}"
+                                        CornerRadius="4"
+                                        Padding="6,1"
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding FeaturedRange}" Style="{StaticResource Caption}" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="{Binding FeaturedName}" Style="{StaticResource Caption}" Margin="0,3,0,0" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding FeaturedPriceText}"
+                                       Style="{StaticResource Numeric}"
+                                       FontSize="20"
+                                       HorizontalAlignment="Right" />
+                            <TextBlock Text="{Binding FeaturedChangePercent, Converter={StaticResource Percent}}"
+                                       FontFamily="{StaticResource NumericFont}"
+                                       FontSize="12"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,2,0,0"
+                                       Foreground="{Binding FeaturedChangePercent, Converter={StaticResource ChangeBrush}}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <lvc:CartesianChart Series="{Binding ChartSeries}"
+                                        XAxes="{Binding ChartXAxes}"
+                                        YAxes="{Binding ChartYAxes}"
+                                        Height="250"
+                                        Background="Transparent"
+                                        TooltipPosition="Hidden"
+                                        LegendPosition="Hidden" />
+                </StackPanel>
+            </Border>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.3*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource Card}" Margin="0,0,7,0">
+                    <StackPanel>
+                        <TextBlock Text="Maiores posições" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Text="Ordenadas por valor de mercado"
+                                   Style="{StaticResource Caption}"
+                                   Margin="0,3,0,12" />
+
+                        <ItemsControl ItemsSource="{Binding TopPositions}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Ticker}"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource InkBrush}" />
+                                            <TextBlock Text="{Binding Name}"
+                                                       Style="{StaticResource Caption}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxWidth="170"
+                                                       HorizontalAlignment="Left" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <TextBlock Text="{Binding MarketValue, Converter={StaticResource Currency}}"
+                                                       Style="{StaticResource Numeric}"
+                                                       HorizontalAlignment="Right" />
+                                            <TextBlock Text="{Binding Quantity, Converter={StaticResource Price}}"
+                                                       Style="{StaticResource NumericSmall}"
+                                                       HorizontalAlignment="Right" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding ChangePercent, Converter={StaticResource Percent}}"
+                                                   FontFamily="{StaticResource NumericFont}"
+                                                   FontSize="12"
+                                                   VerticalAlignment="Center"
+                                                   MinWidth="58"
+                                                   TextAlignment="Right"
+                                                   Foreground="{Binding ChangePercent, Converter={StaticResource ChangeBrush}}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Sua carteira está vazia. Cadastre um ativo em Carteira para ver o resumo aqui."
+                                   Style="{StaticResource PageSubtitle}"
+                                   Margin="0,4,0,0"
+                                   Visibility="{Binding HasPositions, Converter={StaticResource InverseBoolToVisible}}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource Card}" Margin="7,0,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Mercado agora" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Text="B3 e cripto em reais"
+                                   Style="{StaticResource Caption}"
+                                   Margin="0,3,0,12" />
+
+                        <ItemsControl ItemsSource="{Binding WatchlistItems}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,9">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Ticker}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource InkBrush}" />
+                                            <TextBlock Text="{Binding Name}"
+                                                       Style="{StaticResource Caption}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxWidth="140"
+                                                       HorizontalAlignment="Left" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding Price, Converter={StaticResource Price}}"
+                                                       Style="{StaticResource Numeric}"
+                                                       FontSize="12"
+                                                       HorizontalAlignment="Right" />
+                                            <TextBlock Text="{Binding ChangePercent, Converter={StaticResource Percent}}"
+                                                       FontFamily="{StaticResource NumericFont}"
+                                                       FontSize="11"
+                                                       HorizontalAlignment="Right"
+                                                       Foreground="{Binding ChangePercent, Converter={StaticResource ChangeBrush}}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

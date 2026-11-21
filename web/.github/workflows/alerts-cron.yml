@@ -1,0 +1,57 @@
+# Dispara a verificação de alertas a cada 5 minutos.
+#
+# Por que existe, se já há vercel.json: no plano Hobby da Vercel, cron jobs são
+# limitados a UMA execução por dia — inútil para alerta de preço intradiário.
+# O GitHub Actions (repositório público = minutos ilimitados) cobre esse buraco
+# chamando a mesma rota protegida por CRON_SECRET.
+#
+# Configure em Settings > Secrets and variables > Actions:
+#   ALERTS_ENDPOINT  -> https://seu-app.vercel.app/api/alerts/check
+#   CRON_SECRET      -> o mesmo valor da env var da Vercel
+#
+# O `schedule` do GitHub é best-effort (pode atrasar alguns minutos em picos),
+# o que é aceitável para alertas de preço.
+
+name: Verificar alertas de preço
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: alerts-cron
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Chamar /api/alerts/check
+        env:
+          ALERTS_ENDPOINT: ${{ secrets.ALERTS_ENDPOINT }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$ALERTS_ENDPOINT" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::error::Configure os secrets ALERTS_ENDPOINT e CRON_SECRET no repositório."
+            exit 1
+          fi
+
+          response_file=$(mktemp)
+          status=$(curl --silent --show-error --location \
+            --max-time 90 \
+            --output "$response_file" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            --request POST \
+            "$ALERTS_ENDPOINT")
+
+          echo "HTTP $status"
+          cat "$response_file"
+
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::A verificação falhou com HTTP $status."
+            exit 1
+          fi

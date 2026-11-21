@@ -1,0 +1,216 @@
+import { toNumber } from '@/lib/format';
+import { assetKey } from '@/lib/market';
+import type { Quote } from '@/lib/market/types';
+import type { AssetType, PortfolioRow } from '@/lib/types/database';
+
+/**
+ * Cálculo da carteira.
+ *
+ * Puro de propósito (sem Supabase, sem React): é a mesma matemática que o app
+ * WPF precisa reproduzir, e é o que os testes cobrem.
+ */
+
+export interface Position {
+  id: string;
+  ticker: string;
+  assetType: AssetType;
+  cryptoId: string | null;
+  name: string;
+  logoUrl: string | null;
+  /** Quantidade de cotas (bolsa) ou fração (cripto). */
+  quantity: number;
+  avgPrice: number | null;
+  price: number | null;
+  changePercent: number | null;
+  /** quantity × price. `null` quando não há cotação. */
+  marketValue: number | null;
+  /** quantity × avgPrice. `null` quando o usuário não informou preço médio. */
+  cost: number | null;
+  profit: number | null;
+  profitPercent: number | null;
+  /** Peso no patrimônio, 0..1. `null` se não há cotação. */
+  weight: number | null;
+  notes: string | null;
+  hasQuote: boolean;
+}
+
+export interface PortfolioSummary {
+  totalValue: number;
+  /** Soma do custo apenas das posições que têm preço médio. */
+  totalCost: number;
+  totalProfit: number;
+  totalProfitPercent: number | null;
+  /** Variação do dia em R$, derivada do changeValue de cada cotação. */
+  dayChangeValue: number;
+  dayChangePercent: number | null;
+  positionsCount: number;
+  /** Quantas posições ficaram sem cotação (dado desatualizado ou ticker errado). */
+  missingQuotesCount: number;
+  valueByAssetType: Record<AssetType, number>;
+  best: Position | null;
+  worst: Position | null;
+}
+
+export function buildPositions(
+  rows: readonly PortfolioRow[],
+  quotes: ReadonlyMap<string, Quote>
+): Position[] {
+  const positions: Position[] = [];
+
+  for (const row of rows) {
+    const quantity = toNumber(row.quantity) ?? 0;
+    const avgPrice = toNumber(row.avg_price);
+    const quote = quotes.get(assetKey(row.asset_type, row.ticker));
+
+    const price = quote?.price ?? null;
+    const marketValue = price === null ? null : quantity * price;
+    const cost = avgPrice === null ? null : quantity * avgPrice;
+    const profit = marketValue !== null && cost !== null ? marketValue - cost : null;
+    const profitPercent =
+      profit !== null && cost !== null && cost > 0 ? (profit / cost) * 100 : null;
+
+    positions.push({
+      id: row.id,
+      ticker: row.ticker,
+      assetType: row.asset_type,
+      cryptoId: row.crypto_id,
+      name: quote?.name ?? row.ticker,
+      logoUrl: quote?.logoUrl ?? null,
+      quantity,
+      avgPrice,
+      price,
+      changePercent: quote?.changePercent ?? null,
+      marketValue,
+      cost,
+      profit,
+      profitPercent,
+      weight: null,
+      notes: row.notes,
+      hasQuote: quote !== undefined
+    });
+  }
+
+  return positions;
+}
+
+export function summarizePositions(positions: readonly Position[]): PortfolioSummary {
+  let totalValue = 0;
+  let totalCost = 0;
+  let totalProfit = 0;
+  let dayChangeValue = 0;
+  let previousValue = 0;
+  let missingQuotesCount = 0;
+
+  const valueByAssetType: Record<AssetType, number> = { stock: 0, crypto: 0 };
+
+  for (const position of positions) {
+    if (position.marketValue !== null) {
+      totalValue += position.marketValue;
+      valueByAssetType[position.assetType] += position.marketValue;
+    } else {
+      missingQuotesCount += 1;
+    }
+
+    if (position.cost !== null) {
+      totalCost += position.cost;
+    }
+
+    if (position.profit !== null) {
+      totalProfit += position.profit;
+    }
+
+    if (position.price !== null && position.changePercent !== null) {
+      const percent = position.changePercent;
+      const previous = position.price / (1 + percent / 100);
+
+      if (Number.isFinite(previous)) {
+        previousValue += position.quantity * previous;
+        dayChangeValue += position.quantity * (position.price - previous);
+      }
+    }
+  }
+
+  let best: Position | null = null;
+  let worst: Position | null = null;
+
+  for (const position of positions) {
+    if (position.profitPercent === null) {
+      continue;
+    }
+
+    if (best === null || position.profitPercent > (best.profitPercent ?? 0)) {
+      best = position;
+    }
+
+    if (worst === null || position.profitPercent < (worst.profitPercent ?? 0)) {
+      worst = position;
+    }
+  }
+
+  const totalProfitPercent = totalCost > 0 ? (totalProfit / totalCost) * 100 : null;
+  const dayChangePercent = previousValue > 0 ? (dayChangeValue / previousValue) * 100 : null;
+
+  return {
+    totalValue,
+    totalCost,
+    totalProfit,
+    totalProfitPercent,
+    dayChangeValue,
+    dayChangePercent,
+    positionsCount: positions.length,
+    missingQuotesCount,
+    valueByAssetType,
+    best,
+    worst
+  };
+}
+
+/** Aplica o peso de cada posição no patrimônio total (0..1). */
+export function withWeights(positions: readonly Position[], totalValue: number): Position[] {
+  if (totalValue <= 0) {
+    return positions.map((position) => ({ ...position, weight: null }));
+  }
+
+  return positions.map((position) => ({
+    ...position,
+    weight: position.marketValue === null ? null : position.marketValue / totalValue
+  }));
+}
+
+export interface PositionDraft {
+  ticker: string;
+  assetType: AssetType;
+  cryptoId: string | null;
+  quantity: number;
+  avgPrice: number | null;
+  notes: string | null;
+}
+
+/** Soma a quantidade quando o ativo já existe na carteira (compra adicional). */
+export function mergeQuantity(currentQuantity: number, addedQuantity: number): number {
+  return currentQuantity + addedQuantity;
+}
+
+/** Preço médio ponderado após uma nova compra. */
+export function mergeAveragePrice(
+  currentQuantity: number,
+  currentAvgPrice: number | null,
+  addedQuantity: number,
+  addedPrice: number | null
+): number | null {
+  if (addedPrice === null) {
+    return currentAvgPrice;
+  }
+
+  if (currentAvgPrice === null || currentQuantity <= 0) {
+    return addedPrice;
+  }
+
+  const totalQuantity = currentQuantity + addedQuantity;
+
+  if (totalQuantity <= 0) {
+    return currentAvgPrice;
+  }
+
+  return (currentQuantity * currentAvgPrice + addedQuantity * addedPrice) / totalQuantity;
+}

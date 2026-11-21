@@ -1,0 +1,9 @@
+# Configuração local com chaves — o modelo versionado é appsettings.example.json.
+appsettings.json
+
+# Saída de build
+bin/
+obj/
+
+# Capturas de tela usadas em verificação visual
+.artifacts/
