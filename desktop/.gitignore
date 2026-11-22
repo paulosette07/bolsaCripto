@@ -7,3 +7,6 @@ obj/
 
 # Capturas de tela usadas em verificação visual
 .artifacts/
+
+# Saída de dotnet publish (usada só para montar a release)
+dist/
