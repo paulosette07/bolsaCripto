@@ -1,5 +1,8 @@
 # Artefatos locais de verificação (scripts temporários, logs de build)
 .tmp-*.ps1
+.tmp-*.mjs
+.tmp-*.txt
+.tmp-sql/
 /*-out.txt
 /webbuild.txt
 /tsc-out.txt
