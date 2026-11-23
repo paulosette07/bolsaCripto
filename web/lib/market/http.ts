@@ -22,12 +22,14 @@ interface FetchJsonOptions {
   revalidateSeconds?: number;
   /** Preço de alerta não pode vir do cache. */
   noStore?: boolean;
+  /** Headers extras do provider (sobrescrevem os padrões). */
+  headers?: Record<string, string>;
 }
 
 const REQUEST_TIMEOUT_MS = 12_000;
 
 export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
-  const { revalidateSeconds = 60, noStore = false } = options;
+  const { revalidateSeconds = 60, noStore = false, headers } = options;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -35,7 +37,8 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
     const response = await fetch(url, {
       headers: {
         accept: 'application/json',
-        'user-agent': 'bolsa-monitor/1.0 (+https://github.com)'
+        'user-agent': 'bolsa-monitor/1.0 (+https://github.com)',
+        ...headers
       },
       signal: controller.signal,
       ...(noStore

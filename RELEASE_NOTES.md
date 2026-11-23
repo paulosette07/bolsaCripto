@@ -20,4 +20,19 @@ Aplicativo desktop do Bolsa Monitor para Windows 10/11 de 64 bits.
 
 Mesma base, publicada em https://bolsa-monitor.vercel.app
 
+### Correções nesta atualização
+
+- **B3 sem token (erro HTTP 401 no mercado)**: a Brapi passou a exigir token em
+  `/quote/{ticker}`; sem `BRAPI_TOKEN` a tela de mercado mostrava
+  "Falha ao consultar a fonte de dados (HTTP 401)". Agora a camada
+  `web/lib/market/stocks.ts` usa Yahoo Finance quando não há token (e como
+  fallback quando a Brapi falha), então cotação, gráfico de histórico e busca
+  continuam funcionando sem nenhuma credencial. Com `BRAPI_TOKEN` definido, a
+  Brapi segue como fonte principal.
+- **Link de confirmação de e-mail apontando para localhost**: o domínio do
+  `emailRedirectTo` agora é resolvido a partir do próprio request
+  (`web/lib/config/site-url.ts`) em vez de uma variável embutida no build. Se o
+  Supabase ainda cair na home com `?code=`, `web/proxy.ts` reencaminha para a
+  rota que troca o token por sessão.
+
 Código-fonte completo (desktop + web) neste repositório.

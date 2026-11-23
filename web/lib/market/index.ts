@@ -1,11 +1,10 @@
-import { getBrapiHistory, getBrapiQuotes } from './brapi';
 import {
   getCryptoHistory,
   getCryptoQuotes,
   resolveCryptoId,
   searchCrypto
 } from './coingecko';
-import { fetchJson } from './http';
+import { getStockHistory, getStockQuotes, searchStocks } from './stocks';
 import type {
   AssetRef,
   AssetSearchResult,
@@ -24,68 +23,13 @@ import type { AssetType } from '@/lib/types/database';
  * desktop — não vaza para as telas.
  */
 
-const BRAPI_BASE_URL = 'https://brapi.dev/api';
 const MAX_SEARCH_RESULTS = 10;
 
-interface BrapiStockListItem {
-  stock?: string;
-  name?: string;
-  logo?: string;
-  type?: string;
-  subType?: string;
-}
-
-interface BrapiStockListResponse {
-  stocks?: BrapiStockListItem[];
-  error?: boolean;
-  message?: string;
-}
+export { searchStocks };
 
 /** Chave estável de um ativo, independente de case. */
 export function assetKey(assetType: AssetType, ticker: string): string {
   return `${assetType}:${ticker.trim().toUpperCase()}`;
-}
-
-/** Busca ações/FIIs na B3 pelo nome ou ticker. */
-export async function searchStocks(query: string): Promise<AssetSearchResult[]> {
-  const trimmed = query.trim();
-
-  if (trimmed.length < 2) {
-    return [];
-  }
-
-  const url = `${BRAPI_BASE_URL}/quote/list?search=${encodeURIComponent(trimmed)}&limit=${MAX_SEARCH_RESULTS}`;
-
-  try {
-    const payload = await fetchJson<BrapiStockListResponse>(url, { revalidateSeconds: 600 });
-
-    if (payload.error) {
-      return [];
-    }
-
-    const results: AssetSearchResult[] = [];
-
-    for (const item of payload.stocks ?? []) {
-      const ticker = item.stock?.trim().toUpperCase();
-
-      if (!ticker) {
-        continue;
-      }
-
-      results.push({
-        ticker,
-        assetType: 'stock',
-        cryptoId: null,
-        name: item.name?.trim() || ticker,
-        logoUrl: item.logo ?? `https://icons.brapi.dev/icons/${ticker}.svg`
-      });
-    }
-
-    return results;
-  } catch {
-    // Busca é conveniência: o usuário sempre pode digitar o ticker direto.
-    return [];
-  }
 }
 
 /**
@@ -162,7 +106,7 @@ export async function getQuotes(
 
   const [stockQuotes, cryptoQuotes] = await Promise.all([
     stockTickers.size > 0
-      ? getBrapiQuotes([...stockTickers], options)
+      ? getStockQuotes([...stockTickers], options)
       : Promise.resolve([] as Quote[]),
     cryptoIds.size > 0
       ? getCryptoQuotes([...cryptoIds], { noStore: options.noStore, currency: options.currency })
@@ -194,7 +138,7 @@ export async function getHistory(
   options: QuoteOptions = {}
 ): Promise<PriceHistory> {
   if (asset.assetType === 'stock') {
-    return getBrapiHistory(asset.ticker, range, options);
+    return getStockHistory(asset.ticker, range, options);
   }
 
   const resolved = await withResolvedCryptoId(asset);

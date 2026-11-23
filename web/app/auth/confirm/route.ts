@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { safeInternalPath } from '@/lib/auth/redirects';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -23,19 +24,11 @@ const ALLOWED_OTP_TYPES = new Set([
 
 type OtpType = 'signup' | 'invite' | 'magiclink' | 'recovery' | 'email_change' | 'email';
 
-function safeNextPath(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) {
-    return '/painel';
-  }
-
-  return value;
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const tokenHash = searchParams.get('token_hash');
   const rawType = searchParams.get('type');
-  const next = safeNextPath(searchParams.get('next'));
+  const next = safeInternalPath(searchParams.get('next'));
 
   if (!tokenHash || !rawType || !ALLOWED_OTP_TYPES.has(rawType)) {
     return NextResponse.redirect(`${origin}/login?erro=link_invalido`);

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
 import { translateAuthError } from '@/lib/auth/messages';
-import { publicEnv } from '@/lib/env';
+import { resolveSiteUrl } from '@/lib/config/site-url';
 import type { AuthFormState } from '@/lib/forms/states';
 import { createClient } from '@/lib/supabase/server';
 
@@ -92,13 +92,18 @@ export async function signUpAction(
     return { status: 'error', message: 'As senhas não coincidem.', email };
   }
 
+  // O domínio vem do request (Host/x-forwarded-host), não do env: assim o link
+  // enviado por e-mail nunca aponta para localhost em produção. A URL final
+  // ainda precisa estar na lista de Redirect URLs do projeto Supabase.
+  const emailRedirectTo = await resolveSiteUrl('/auth/callback?next=/painel');
+
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { full_name: fullName || null },
-      emailRedirectTo: `${publicEnv.siteUrl}/auth/callback?next=/painel`
+      emailRedirectTo
     }
   });
 

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { recoverEmailLink } from '@/lib/auth/email-link-recovery';
 import { publicEnv } from '@/lib/env';
 
 /**
@@ -23,6 +24,23 @@ function startsWithRoute(pathname: string, route: string): boolean {
 }
 
 export async function proxy(request: NextRequest) {
+  // Link de confirmação que caiu na raiz (Supabase descartou o redirectTo):
+  // reencaminha antes de qualquer chamada ao GoTrue.
+  const recoveredPath = recoverEmailLink(request.nextUrl.pathname, request.nextUrl.searchParams);
+
+  if (recoveredPath) {
+    const recoveryUrl = request.nextUrl.clone();
+    const separatorIndex = recoveredPath.indexOf('?');
+    const recoveredPathname =
+      separatorIndex === -1 ? recoveredPath : recoveredPath.slice(0, separatorIndex);
+    const recoveredQuery = separatorIndex === -1 ? '' : recoveredPath.slice(separatorIndex);
+
+    recoveryUrl.pathname = recoveredPathname;
+    recoveryUrl.search = recoveredQuery;
+
+    return NextResponse.redirect(recoveryUrl);
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey, {

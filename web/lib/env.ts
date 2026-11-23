@@ -6,13 +6,17 @@
  *  - separa claramente o que é público (vai para o browser) do que é segredo.
  */
 
-const FALLBACK_SITE_URL = 'http://localhost:3000';
-
-/** Valores embutidos no bundle do cliente. Devem existir em build-time. */
+/**
+ * Valores embutidos no bundle do cliente. Devem existir em build-time.
+ *
+ * `NEXT_PUBLIC_SITE_URL` não entra aqui de propósito: o domínio dos links de
+ * e-mail vem do próprio request (`lib/config/site-url.ts`). A variável segue
+ * aceita como fallback de servidor, mas um deploy feito com o `.env.local` de
+ * desenvolvimento não gera mais links para localhost.
+ */
 export const publicEnv = {
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
-  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
-  siteUrl: (process.env.NEXT_PUBLIC_SITE_URL ?? FALLBACK_SITE_URL).replace(/\/+$/, '')
+  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 } as const;
 
 /**

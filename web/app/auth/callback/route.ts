@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { safeInternalPath } from '@/lib/auth/redirects';
 import { createClient } from '@/lib/supabase/server';
 
 /**
@@ -10,18 +11,10 @@ import { createClient } from '@/lib/supabase/server';
  * e-mail, cai aqui, e o login falha porque a rota não existia.
  */
 
-function safeNextPath(value: string | null): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) {
-    return '/painel';
-  }
-
-  return value;
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get('code');
-  const next = safeNextPath(searchParams.get('next'));
+  const next = safeInternalPath(searchParams.get('next'));
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?erro=link_invalido`);

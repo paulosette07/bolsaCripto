@@ -15,6 +15,8 @@ next-env.d.ts
 .env.local
 .env*.local
 .env.production
+# o modelo público (sem segredos) é versionado
+!.env.local.example
 
 # vercel
 .vercel
@@ -28,3 +30,4 @@ Thumbs.db
 *.log
 npm-debug.log*
 .env*
+!.env.local.example
