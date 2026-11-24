@@ -2,6 +2,12 @@ Aplicativo desktop do Bolsa Monitor para Windows 10/11 de 64 bits.
 
 **Download:** `BolsaMonitor-win-x64-1.1.0.zip` (104 MB) — extraia a pasta e execute `BolsaMonitor.exe`.
 
+## Correção — favoritar mantém a moeda selecionada
+
+- **Cripto favoritada continua em dólar**: com o seletor `Real | Dólar` em dólar, os cards de favoritos mostram o preço em `US$` em vez de cair para o real. A cotação da B3 segue em reais, como sempre.
+- **A escolha da moeda sobrevive à navegação**: abrir uma ação, buscar outro ativo ou clicar em um favorito não devolve a tela para o real — a preferência volta quando você abre uma cripto de novo.
+- Web e desktop se comportam igual. O pacote `.zip` desta release foi regerado com a correção.
+
 ## Novidades da versão 1.1.0 — Favoritos
 
 - **Favoritos em cards no Mercado**: os ativos marcados com a estrela aparecem em uma faixa de cards no topo da tela Mercado, com preço e variação do dia. Clicar no card abre a cotação completa.
@@ -39,6 +45,14 @@ página. O estado vive na tabela `public.favorites`.
 **Passo único de banco:** rode `web/supabase/migrations/0002_favorites.sql` no SQL
 Editor do Supabase (depois do `0001_init.sql`). É idempotente. Até isso ser feito, a
 página mostra um aviso no lugar da seção e a estrela não grava — nada mais quebra.
+
+### Moeda nos favoritos na web
+
+A faixa de favoritos é buscada com a mesma moeda escolhida na página
+(`web/app/(app)/mercado/page.tsx` → `getQuoteMap(..., { currency })`), e os links dos
+cards e da busca levam `?currency=USD` adiante (`web/lib/market/types.ts` →
+`assetHref`). Assim favoritar, abrir um favorito ou buscar outro ativo não troca a
+moeda de exibição.
 
 ### Correções da versão anterior (1.0.x)
 
