@@ -14,6 +14,15 @@ public interface IMarketService
 
     Task<IReadOnlyDictionary<string, Quote>> GetQuoteMapAsync(IEnumerable<AssetRef> assets, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Mapa na moeda pedida — usado pela faixa de favoritos, para os cards de
+    /// cripto seguirem a moeda escolhida na tela. Bolsa continua em reais.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, Quote>> GetQuoteMapAsync(
+        IEnumerable<AssetRef> assets,
+        DisplayCurrency currency,
+        CancellationToken cancellationToken = default);
+
     Task<Quote?> GetSingleQuoteAsync(AssetRef asset, CancellationToken cancellationToken = default);
 
     Task<PriceHistory> GetHistoryAsync(AssetRef asset, MarketRange range, CancellationToken cancellationToken = default);

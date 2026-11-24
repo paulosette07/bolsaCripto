@@ -94,7 +94,11 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
 
   if (favorites.length > 0) {
     try {
-      favoriteQuotes = await getQuoteMap(favorites.map(toAssetRef));
+      // A moeda escolhida vale para os cards: cripto favoritada continua em
+      // dólar quando o usuário está vendo dólar. Bolsa segue em reais.
+      favoriteQuotes = await getQuoteMap(favorites.map(toAssetRef), {
+        currency: requestedCurrency
+      });
     } catch {
       // Provider fora do ar: os cards aparecem com "sem cotação", sem derrubar a página.
       favoriteQuotes = new Map();
@@ -136,13 +140,17 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
           </p>
         </div>
 
-        <MarketNavSearch />
+        <MarketNavSearch currency={requestedCurrency} />
       </header>
 
       {favoritesMessage ? (
         <Alert tone="info">{favoritesMessage}</Alert>
       ) : (
-        <FavoritesSection favorites={favorites} quotes={favoriteQuotes} />
+        <FavoritesSection
+          favorites={favorites}
+          quotes={favoriteQuotes}
+          currency={requestedCurrency}
+        />
       )}
 
       {errorMessage ? <Alert tone="error">{errorMessage}</Alert> : null}

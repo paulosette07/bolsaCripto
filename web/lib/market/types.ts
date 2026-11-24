@@ -124,8 +124,8 @@ export function currencyForAsset(assetType: AssetType, requested: Currency): Cur
  * Link para a página de mercado de um ativo.
  *
  * Cripto carrega o id canônico da CoinGecko (sem ele a página teria que resolver
- * o id de novo) e, opcionalmente, a moeda escolhida. Ativo da B3 ignora moeda:
- * é sempre real.
+ * o id de novo). A moeda escolhida viaja no link: só cripto muda o preço, mas
+ * ativo da B3 também a repassa para que os favoritos continuem na moeda certa.
  */
 export function assetHref(asset: AssetRef, options: { currency?: Currency } = {}): string {
   const params = new URLSearchParams({
@@ -137,7 +137,10 @@ export function assetHref(asset: AssetRef, options: { currency?: Currency } = {}
     params.set('cryptoId', asset.cryptoId);
   }
 
-  if (asset.assetType === 'crypto' && options.currency === 'USD') {
+  // A moeda escolhida viaja junto mesmo em ativo da B3 (que segue em reais):
+  // é assim que a preferência por dólar sobrevive ao usuário passear entre
+  // ações e criptos e voltar — inclusive nos cards de favoritos.
+  if (options.currency === 'USD') {
     params.set('currency', 'USD');
   }
 

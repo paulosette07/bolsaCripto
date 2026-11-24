@@ -99,6 +99,20 @@ public sealed class MarketService : IMarketService
         return quotes.ToDictionary(quote => quote.Key, quote => quote, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Mapa na moeda pedida. Serve à faixa de favoritos: os cards de cripto
+    /// acompanham o seletor da tela, sem perder a cotação da B3 em reais.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, Quote>> GetQuoteMapAsync(
+        IEnumerable<AssetRef> assets,
+        DisplayCurrency currency,
+        CancellationToken cancellationToken = default)
+    {
+        var quotes = await GetQuotesAsync(assets, currency, cancellationToken).ConfigureAwait(false);
+
+        return quotes.ToDictionary(quote => quote.Key, quote => quote, StringComparer.OrdinalIgnoreCase);
+    }
+
     public Task<Quote?> GetSingleQuoteAsync(AssetRef asset, CancellationToken cancellationToken = default) =>
         GetQuotesAsync(new[] { asset }, cancellationToken)
             .ContinueWith(task => task.Result.FirstOrDefault() as Quote, TaskContinuationOptions.OnlyOnRanToCompletion);

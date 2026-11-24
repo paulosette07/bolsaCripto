@@ -72,6 +72,30 @@ public sealed class DemoMarketService : IMarketService
         return quotes.ToDictionary(quote => quote.Key, quote => quote, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Mapa na moeda pedida: no demo a cripto passa pela taxa fixa, então os
+    /// cards de favoritos também mostram "US$" quando o modo dólar está ativo.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, Quote>> GetQuoteMapAsync(
+        IEnumerable<AssetRef> assets,
+        DisplayCurrency currency,
+        CancellationToken cancellationToken = default)
+    {
+        var quotes = new List<Quote>();
+
+        foreach (var asset in assets)
+        {
+            var quote = await GetSingleQuoteAsync(asset, currency, cancellationToken).ConfigureAwait(false);
+
+            if (quote is not null)
+            {
+                quotes.Add(quote);
+            }
+        }
+
+        return quotes.ToDictionary(quote => quote.Key, quote => quote, StringComparer.OrdinalIgnoreCase);
+    }
+
     public async Task<Quote?> GetSingleQuoteAsync(AssetRef asset, CancellationToken cancellationToken = default)
     {
         var quotes = await GetQuotesAsync(new[] { asset }, cancellationToken).ConfigureAwait(false);

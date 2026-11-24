@@ -3,13 +3,15 @@ import { Star } from 'lucide-react';
 import { FavoriteCard } from '@/components/market/favorite-card';
 import { MAX_FAVORITES } from '@/lib/favorites';
 import { assetKey } from '@/lib/market';
-import type { Quote } from '@/lib/market/types';
+import type { Currency, Quote } from '@/lib/market/types';
 import type { FavoriteRow } from '@/lib/types/database';
 
 interface FavoritesSectionProps {
   favorites: readonly FavoriteRow[];
   /** Cotações indexadas por `assetKey`; vazio quando o provider falhou. */
   quotes: ReadonlyMap<string, Quote>;
+  /** Moeda escolhida na página; os cards mostram e abrem o ativo nela. */
+  currency: Currency;
 }
 
 /**
@@ -19,7 +21,7 @@ interface FavoritesSectionProps {
  * para favoritar. Esconder a seção quando não há favoritos deixaria a estrela
  * do ativo sem explicação.
  */
-export function FavoritesSection({ favorites, quotes }: FavoritesSectionProps) {
+export function FavoritesSection({ favorites, quotes, currency }: FavoritesSectionProps) {
   const atLimit = favorites.length >= MAX_FAVORITES;
 
   return (
@@ -75,6 +77,7 @@ export function FavoritesSection({ favorites, quotes }: FavoritesSectionProps) {
               key={`${favorite.asset_type}-${favorite.ticker}`}
               favorite={favorite}
               quote={quotes.get(assetKey(favorite.asset_type, favorite.ticker)) ?? null}
+              currency={currency}
               atLimit={atLimit}
             />
           ))}

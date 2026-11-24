@@ -64,6 +64,13 @@ public sealed partial class MarketViewModel : PageViewModel
     private CancellationTokenSource? _searchCts;
     private IReadOnlyList<FavoriteRow> _favoriteRows = Array.Empty<FavoriteRow>();
 
+    /// <summary>
+    /// Moeda que o usuário escolheu para cripto. Sobrevive à troca de ativo — a
+    /// B3 é sempre em reais — e é a que a faixa de favoritos segue: favoritar ou
+    /// abrir uma ação não devolve a tela para o real.
+    /// </summary>
+    private DisplayCurrency _preferredCurrency = DisplayCurrency.Brl;
+
     public MarketViewModel(IMarketService market, IFavoriteRepository favorites)
     {
         _market = market;
@@ -345,7 +352,10 @@ public sealed partial class MarketViewModel : PageViewModel
             try
             {
                 quotes = await _market
-                    .GetQuoteMapAsync(rows.Select(row => row.ToAssetRef()), cancellationToken)
+                    .GetQuoteMapAsync(
+                        rows.Select(row => row.ToAssetRef()),
+                        _preferredCurrency,
+                        cancellationToken)
                     .ConfigureAwait(true);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -421,7 +431,7 @@ public sealed partial class MarketViewModel : PageViewModel
     private async Task LoadAssetAsync(AssetRef asset, MarketRange range, CancellationToken cancellationToken)
     {
         // Bolsa ignora a escolha de moeda: reais são a única cotação real da B3.
-        var currency = DisplayCurrencyExtensions.ForAsset(asset.AssetType, SelectedCurrency);
+        var currency = DisplayCurrencyExtensions.ForAsset(asset.AssetType, _preferredCurrency);
         CanSwitchCurrency = asset.AssetType == AssetType.Crypto;
         SelectCurrency(currency);
 
@@ -454,19 +464,29 @@ public sealed partial class MarketViewModel : PageViewModel
     [RelayCommand]
     private async Task SelectCurrencyAsync(CurrencyOption? option)
     {
-        if (option is null || !CanSwitchCurrency || option.Currency == SelectedCurrency)
+        if (option is null || !CanSwitchCurrency)
         {
             return;
         }
 
+        if (option.Currency == _preferredCurrency && option.Currency == SelectedCurrency)
+        {
+            return;
+        }
+
+        _preferredCurrency = option.Currency;
         SelectCurrency(option.Currency);
 
         var asset = SelectedAsset is null
             ? new AssetRef(Ticker, AssetType.Stock, null)
             : new AssetRef(SelectedAsset.Ticker, SelectedAsset.AssetType, SelectedAsset.CryptoId);
 
-        await RunGuardedAsync(() => LoadAssetAsync(asset, SelectedRange, CancellationToken.None))
-            .ConfigureAwait(true);
+        await RunGuardedAsync(async () =>
+        {
+            await LoadAssetAsync(asset, SelectedRange, CancellationToken.None).ConfigureAwait(true);
+            // Os cards de favoritos seguem a mesma moeda, sem recarregar a página.
+            await LoadFavoritesAsync(CancellationToken.None).ConfigureAwait(true);
+        }).ConfigureAwait(true);
     }
 
     private void SelectCurrency(DisplayCurrency currency)

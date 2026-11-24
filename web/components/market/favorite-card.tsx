@@ -4,7 +4,7 @@ import { TrendingDown, TrendingUp } from 'lucide-react';
 import { ChangePill } from '@/components/ui/delta';
 import { formatPrice } from '@/lib/format';
 import { assetHref } from '@/lib/market/types';
-import type { Quote } from '@/lib/market/types';
+import type { Currency, Quote } from '@/lib/market/types';
 import { toAssetRef } from '@/lib/favorites';
 import type { FavoriteRow } from '@/lib/types/database';
 
@@ -13,6 +13,8 @@ import { FavoriteToggle } from './favorite-toggle';
 interface FavoriteCardProps {
   favorite: FavoriteRow;
   quote: Quote | null;
+  /** Moeda escolhida na página: o card abre o ativo sem trocar de moeda. */
+  currency: Currency;
   /** Verdadeiro quando o usuário já usou todos os favoritos disponíveis. */
   atLimit: boolean;
 }
@@ -24,9 +26,9 @@ interface FavoriteCardProps {
  * dele em `z-10` — assim o mesmo card abre o ativo e permite desfavoritar sem
  * aninhar botão dentro de link.
  */
-export function FavoriteCard({ favorite, quote, atLimit }: FavoriteCardProps) {
+export function FavoriteCard({ favorite, quote, currency, atLimit }: FavoriteCardProps) {
   const asset = toAssetRef(favorite);
-  const href = assetHref(asset);
+  const href = assetHref(asset, { currency });
   const isUp = (quote?.changePercent ?? 0) > 0;
   const ChangeIcon = isUp ? TrendingUp : TrendingDown;
 
