@@ -49,6 +49,30 @@ public sealed class PortfolioRow : BaseModel
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+[Table("favorites")]
+public sealed class FavoriteRow : BaseModel
+{
+    [PrimaryKey("id")]
+    public Guid Id { get; set; }
+
+    [Column("user_id")]
+    public Guid UserId { get; set; }
+
+    [Column("ticker")]
+    public string Ticker { get; set; } = string.Empty;
+
+    [Column("asset_type")]
+    public string AssetType { get; set; } = "stock";
+
+    [Column("crypto_id")]
+    public string? CryptoId { get; set; }
+
+    [Column("created_at")]
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public AssetRef ToAssetRef() => new(Ticker, AssetTypeExtensions.FromDbValue(AssetType), CryptoId);
+}
+
 [Table("price_alerts")]
 public sealed class PriceAlertRow : BaseModel
 {

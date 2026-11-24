@@ -96,6 +96,103 @@
                         Margin="8,0,0,0" />
             </Grid>
 
+            <!-- Favoritos: cards dos ativos marcados com a estrela -->
+            <StackPanel Margin="0,0,0,18">
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Favoritos" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Text="{Binding Favorites.Count, StringFormat={}{0}/12}"
+                                   Style="{StaticResource Caption}"
+                                   Margin="8,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="1"
+                               Text="Clique no card para abrir a cotação"
+                               Style="{StaticResource Caption}"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding HasFavorites, Converter={StaticResource BoolToVisible}}" />
+                </Grid>
+
+                <ItemsControl ItemsSource="{Binding Favorites}"
+                              Visibility="{Binding HasFavorites, Converter={StaticResource BoolToVisible}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource FavoriteCardButton}"
+                                    Width="200"
+                                    Margin="0,0,10,10"
+                                    Command="{Binding DataContext.OpenFavoriteCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding}">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Margin="0,0,6,0">
+                                            <TextBlock Text="{Binding Ticker}"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource InkBrush}" />
+                                            <TextBlock Text="{Binding Name}"
+                                                       Style="{StaticResource Caption}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+
+                                        <Button Grid.Column="1"
+                                                Style="{StaticResource FavoriteStarOn}"
+                                                VerticalAlignment="Top"
+                                                Command="{Binding DataContext.ToggleFavoriteCardCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+
+                                    <TextBlock Text="{Binding PriceText}"
+                                               Style="{StaticResource Numeric}"
+                                               FontSize="15"
+                                               FontWeight="SemiBold"
+                                               Margin="0,8,0,0" />
+
+                                    <TextBlock Text="{Binding ChangeText}"
+                                               FontFamily="{StaticResource NumericFont}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{Binding ChangePercent, Converter={StaticResource ChangeBrush}}" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border Style="{StaticResource CardFlat}"
+                        Visibility="{Binding HasFavorites, Converter={StaticResource InverseBoolToVisible}}">
+                    <StackPanel>
+                        <TextBlock Text="Nenhum ativo favoritado ainda" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Text="Abra um ativo e toque na estrela para acompanhá-lo aqui em cards, com preço e variação do dia."
+                                   Style="{StaticResource PageSubtitle}"
+                                   FontSize="12"
+                                   Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="{Binding FavoritesMessage}"
+                           Style="{StaticResource Caption}"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource DownBrush}"
+                           Margin="0,6,0,0"
+                           Visibility="{Binding FavoritesMessage, Converter={StaticResource NullToVisible}}" />
+            </StackPanel>
+
             <!-- Sugestões -->
             <Border Style="{StaticResource CardFlat}"
                     Margin="0,0,0,16"
@@ -162,10 +259,20 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel>
-                            <TextBlock Text="{Binding Ticker}"
-                                       FontSize="24"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource InkBrush}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Ticker}"
+                                           FontSize="24"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource InkBrush}" />
+
+                                <ToggleButton Style="{StaticResource FavoriteStar}"
+                                              Margin="10,0,0,0"
+                                              VerticalAlignment="Center"
+                                              IsChecked="{Binding IsCurrentFavorite, Mode=OneWay}"
+                                              IsEnabled="{Binding CanToggleCurrentFavorite}"
+                                              ToolTip="Favoritar este ativo"
+                                              Command="{Binding ToggleCurrentFavoriteCommand}" />
+                            </StackPanel>
                             <TextBlock Text="{Binding AssetName}" Style="{StaticResource PageSubtitle}" Margin="0,2,0,0" />
                             <TextBlock Text="{Binding AssetKind}" Style="{StaticResource Caption}" Margin="0,3,0,0" />
                         </StackPanel>

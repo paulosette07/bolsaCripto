@@ -48,6 +48,15 @@ export type PortfolioRow = {
   updated_at: string;
 };
 
+export type FavoriteRow = {
+  id: string;
+  user_id: string;
+  ticker: string;
+  asset_type: AssetType;
+  crypto_id: string | null;
+  created_at: string;
+};
+
 export type PriceAlertRow = {
   id: string;
   user_id: string;
@@ -135,6 +144,23 @@ export interface Database {
           avg_price?: number | string | null;
           notes?: string | null;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      favorites: {
+        Row: FavoriteRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          ticker: string;
+          asset_type: AssetType;
+          crypto_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          ticker?: string;
+          asset_type?: AssetType;
+          crypto_id?: string | null;
         };
         Relationships: [];
       };

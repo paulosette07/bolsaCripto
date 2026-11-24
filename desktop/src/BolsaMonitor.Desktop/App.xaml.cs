@@ -155,6 +155,7 @@ public partial class App : Application
         {
             services.AddSingleton<IMarketService, DemoMarketService>();
             services.AddSingleton<IPortfolioRepository, DemoPortfolioRepository>();
+            services.AddSingleton<IFavoriteRepository, DemoFavoriteRepository>();
             services.AddSingleton<IAlertRepository, DemoAlertRepository>();
         }
         else
@@ -164,6 +165,7 @@ public partial class App : Application
             services.AddSingleton<CoinGeckoClient>();
             services.AddSingleton<IMarketService, MarketService>();
             services.AddSingleton<IPortfolioRepository, PortfolioRepository>();
+            services.AddSingleton<IFavoriteRepository, FavoriteRepository>();
             services.AddSingleton<IAlertRepository, AlertRepository>();
         }
 

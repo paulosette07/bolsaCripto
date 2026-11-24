@@ -119,3 +119,27 @@ export function parseCurrency(value: unknown, fallback: Currency = 'BRL'): Curre
 export function currencyForAsset(assetType: AssetType, requested: Currency): Currency {
   return assetType === 'crypto' ? requested : 'BRL';
 }
+
+/**
+ * Link para a página de mercado de um ativo.
+ *
+ * Cripto carrega o id canônico da CoinGecko (sem ele a página teria que resolver
+ * o id de novo) e, opcionalmente, a moeda escolhida. Ativo da B3 ignora moeda:
+ * é sempre real.
+ */
+export function assetHref(asset: AssetRef, options: { currency?: Currency } = {}): string {
+  const params = new URLSearchParams({
+    ticker: asset.ticker.trim().toUpperCase(),
+    type: asset.assetType
+  });
+
+  if (asset.assetType === 'crypto' && asset.cryptoId) {
+    params.set('cryptoId', asset.cryptoId);
+  }
+
+  if (asset.assetType === 'crypto' && options.currency === 'USD') {
+    params.set('currency', 'USD');
+  }
+
+  return `/mercado?${params.toString()}`;
+}

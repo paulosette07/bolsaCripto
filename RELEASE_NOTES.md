@@ -1,11 +1,20 @@
 Aplicativo desktop do Bolsa Monitor para Windows 10/11 de 64 bits.
 
-**Download:** `BolsaMonitor-win-x64-1.0.0.zip` (104 MB) — extraia a pasta e execute `BolsaMonitor.exe`.
+**Download:** `BolsaMonitor-win-x64-1.1.0.zip` (104 MB) — extraia a pasta e execute `BolsaMonitor.exe`.
+
+## Novidades da versão 1.1.0 — Favoritos
+
+- **Favoritos em cards no Mercado**: os ativos marcados com a estrela aparecem em uma faixa de cards no topo da tela Mercado, com preço e variação do dia. Clicar no card abre a cotação completa.
+- **Estrela no ativo aberto**: ao lado do ticker da cotação há uma estrela para favoritar/desfavoritar o ativo em um clique.
+- **Até 12 favoritos** por usuário. No limite, a estrela bloqueia novos favoritos, mas remover continua liberado.
+- **Favoritar não é comprar**: a lista é independente da carteira — não guarda quantidade nem preço médio.
+- **Sincronizado entre web e desktop**: as duas aplicações leem e gravam a mesma tabela `public.favorites` no Supabase.
+- Sem a migração aplicada, a tela continua funcionando e mostra um aviso no lugar da seção de favoritos.
 
 ## O que tem nesta versão
 
 - **Painel**: resumo da carteira e variações do dia
-- **Mercado**: cotações da B3 (Brapi) e criptomoedas (CoinGecko), com gráfico de histórico
+- **Mercado**: cotações da B3 (Brapi) e criptomoedas (CoinGecko), com gráfico de histórico e cards de favoritos
 - **Cripto em real ou dólar**: seletor `Real | Dólar` na tela Mercado, disponível apenas para criptomoedas — alterna cotação, variação e eixo do gráfico. Ações da B3 continuam em reais.
 - **Carteira**: posições, preço médio e resultado
 - **Alertas**: preço-alvo com envio de e-mail
@@ -20,7 +29,18 @@ Aplicativo desktop do Bolsa Monitor para Windows 10/11 de 64 bits.
 
 Mesma base, publicada em https://bolsa-monitor.vercel.app
 
-### Correções nesta atualização
+### Favoritos na web
+
+A tela `/mercado` ganhou a mesma faixa de favoritos em cards, com a estrela no ativo
+aberto. A ação é um *server action* (`web/app/actions/favorites.ts`): alterna entre
+inserir e remover, resolve o `crypto_id` na CoinGecko antes de gravar e revalida a
+página. O estado vive na tabela `public.favorites`.
+
+**Passo único de banco:** rode `web/supabase/migrations/0002_favorites.sql` no SQL
+Editor do Supabase (depois do `0001_init.sql`). É idempotente. Até isso ser feito, a
+página mostra um aviso no lugar da seção e a estrela não grava — nada mais quebra.
+
+### Correções da versão anterior (1.0.x)
 
 - **B3 sem token (erro HTTP 401 no mercado)**: a Brapi passou a exigir token em
   `/quote/{ticker}`; sem `BRAPI_TOKEN` a tela de mercado mostrava

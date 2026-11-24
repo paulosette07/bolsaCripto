@@ -4,16 +4,21 @@ import { Bitcoin, Building2, Clock3 } from 'lucide-react';
 
 import { PriceChart } from '@/components/charts/price-chart';
 import { CurrencyToggle } from '@/components/market/currency-toggle';
+import { FavoriteToggle } from '@/components/market/favorite-toggle';
+import { FavoritesSection } from '@/components/market/favorites-section';
 import { MarketNavSearch } from '@/components/market/market-nav-search';
 import { buttonClasses } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Alert } from '@/components/ui/alert';
 import { ChangePill } from '@/components/ui/delta';
+import { isFavorited, MAX_FAVORITES, toAssetRef } from '@/lib/favorites';
 import { formatCurrency, formatDateTime, formatPrice, formatRelativeTime } from '@/lib/format';
 import { toMarketErrorMessage } from '@/lib/market/http';
-import { getHistory, getSingleQuote } from '@/lib/market';
-import { currencyForAsset, isAssetType, parseCurrency } from '@/lib/market/types';
-import type { AssetRef } from '@/lib/market/types';
+import { getHistory, getQuoteMap, getSingleQuote } from '@/lib/market';
+import { assetHref, currencyForAsset, isAssetType, parseCurrency } from '@/lib/market/types';
+import type { AssetRef, Quote } from '@/lib/market/types';
+import { createClient } from '@/lib/supabase/server';
+import type { FavoriteRow } from '@/lib/types/database';
 
 export const metadata: Metadata = {
   title: 'Mercado'
@@ -58,6 +63,46 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
   const currency = asset ? currencyForAsset(asset.assetType, requestedCurrency) : requestedCurrency;
   const canSwitchCurrency = asset?.assetType === 'crypto';
 
+  // Favoritos são lidos antes da cotação do ativo: a seção aparece no topo da
+  // página e não depende do ativo selecionado.
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  let favorites: FavoriteRow[] = [];
+  let favoritesMessage: string | null = null;
+
+  if (user) {
+    const { data, error } = await supabase
+      .from('favorites')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      favoritesMessage =
+        error.code === 'PGRST205'
+          ? 'Favoritos ainda não estão ativos neste projeto: rode web/supabase/migrations/0002_favorites.sql no SQL Editor do Supabase.'
+          : 'Não foi possível carregar seus favoritos agora. Tente recarregar a página.';
+    } else {
+      favorites = (data ?? []).slice(0, MAX_FAVORITES);
+    }
+  }
+
+  let favoriteQuotes = new Map<string, Quote>();
+
+  if (favorites.length > 0) {
+    try {
+      favoriteQuotes = await getQuoteMap(favorites.map(toAssetRef));
+    } catch {
+      // Provider fora do ar: os cards aparecem com "sem cotação", sem derrubar a página.
+      favoriteQuotes = new Map();
+    }
+  }
+
+  const atFavoriteLimit = favorites.length >= MAX_FAVORITES;
+
   let quote = null;
   let points: Awaited<ReturnType<typeof getHistory>>['points'] = [];
   let errorMessage: string | null = null;
@@ -80,8 +125,6 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
     }
   }
 
-  const carryCurrency = requestedCurrency === 'USD' ? '&currency=USD' : '';
-
   return (
     <div className="space-y-6">
       <header className="space-y-4">
@@ -96,6 +139,12 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
         <MarketNavSearch />
       </header>
 
+      {favoritesMessage ? (
+        <Alert tone="info">{favoritesMessage}</Alert>
+      ) : (
+        <FavoritesSection favorites={favorites} quotes={favoriteQuotes} />
+      )}
+
       {errorMessage ? <Alert tone="error">{errorMessage}</Alert> : null}
 
       {!asset ? (
@@ -107,16 +156,20 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
 
           <div className="flex flex-wrap gap-2 p-4 sm:p-5">
             {SUGGESTIONS.map((suggestion) => {
-              const cryptoId = suggestion.cryptoId
-                ? `&cryptoId=${encodeURIComponent(suggestion.cryptoId)}`
-                : '';
               // Cripto mantém a moeda escolhida; ação ignora (é sempre BRL).
-              const currencyParam = suggestion.type === 'crypto' ? carryCurrency : '';
+              const href = assetHref(
+                {
+                  ticker: suggestion.ticker,
+                  assetType: suggestion.type,
+                  cryptoId: suggestion.cryptoId
+                },
+                { currency: requestedCurrency }
+              );
 
               return (
                 <Link
                   key={`${suggestion.type}-${suggestion.ticker}`}
-                  href={`/mercado?ticker=${suggestion.ticker}&type=${suggestion.type}${cryptoId}${currencyParam}`}
+                  href={href}
                   className="inline-flex items-center gap-1.5 rounded-full border border-line bg-canvas px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
                 >
                   {suggestion.type === 'crypto' ? (
@@ -166,11 +219,23 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
                   </div>
                 </div>
 
-                {canSwitchCurrency ? (
-                  <div className="mt-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {canSwitchCurrency ? (
                     <CurrencyToggle asset={asset} currency={currency} />
-                  </div>
-                ) : null}
+                  ) : null}
+
+                  <FavoriteToggle
+                    ticker={quote.ticker}
+                    assetType={quote.assetType}
+                    cryptoId={quote.cryptoId}
+                    isFavorite={isFavorited(favorites, {
+                      assetType: quote.assetType,
+                      ticker: quote.ticker
+                    })}
+                    variant="label"
+                    disabled={atFavoriteLimit}
+                  />
+                </div>
               </div>
 
               <div className="text-right">

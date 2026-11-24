@@ -17,6 +17,7 @@
     <Color x:Key="InkFaintColor">#6C7A74</Color>
     <Color x:Key="UpColor">#10B981</Color>
     <Color x:Key="DownColor">#EF4444</Color>
+    <Color x:Key="WarnColor">#F59E0B</Color>
 
     <SolidColorBrush x:Key="CanvasBrush" Color="{StaticResource CanvasColor}" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" />
@@ -29,6 +30,8 @@
     <SolidColorBrush x:Key="InkFaintBrush" Color="{StaticResource InkFaintColor}" />
     <SolidColorBrush x:Key="UpBrush" Color="{StaticResource UpColor}" />
     <SolidColorBrush x:Key="DownBrush" Color="{StaticResource DownColor}" />
+    <SolidColorBrush x:Key="WarnBrush" Color="{StaticResource WarnColor}" />
+    <SolidColorBrush x:Key="WarnSoftBrush" Color="#1AF59E0B" />
     <SolidColorBrush x:Key="UpSoftBrush" Color="#1A10B981" />
     <SolidColorBrush x:Key="DownSoftBrush" Color="#1AEF4444" />
     <SolidColorBrush x:Key="UpDeepBrush" Color="#04140E" />
@@ -446,6 +449,134 @@
                         </Setter.Value>
                     </Setter>
                 </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================ Favoritos ============================ -->
+
+    <!--
+        Estrela de favorito. ToggleButton porque o estado "cheio" é o próprio
+        IsChecked: o template troca preenchimento e cor sem precisar de
+        conversor no meio.
+    -->
+    <Style x:Key="FavoriteStar" TargetType="ToggleButton">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource InkFaintBrush}" />
+        <Setter Property="ToolTip" Value="Favoritar ativo" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Root"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{StaticResource LineBrush}"
+                            BorderThickness="1"
+                            CornerRadius="14">
+                        <Path x:Name="Star"
+                              Data="M 8,1.2 L 10.1,6.1 L 15.4,6.7 L 11.5,10.2 L 12.6,15.4 L 8,12.7 L 3.4,15.4 L 4.5,10.2 L 0.6,6.7 L 5.9,6.1 Z"
+                              Width="13"
+                              Height="13"
+                              Stretch="Uniform"
+                              Fill="Transparent"
+                              Stroke="{TemplateBinding Foreground}"
+                              StrokeThickness="1.2"
+                              StrokeLineJoin="Round"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+                            <Setter TargetName="Star" Property="Stroke" Value="{StaticResource InkBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource WarnSoftBrush}" />
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource WarnBrush}" />
+                            <Setter TargetName="Star" Property="Fill" Value="{StaticResource WarnBrush}" />
+                            <Setter TargetName="Star" Property="Stroke" Value="{StaticResource WarnBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        Estrela "cheia" do card. É Button, não ToggleButton: o card já é um
+        favorito por definição, e um ToggleButton ficaria com o estado visual
+        fora de sincronia quando o clique dispara a remoção.
+    -->
+    <Style x:Key="FavoriteStarOn" TargetType="Button">
+        <Setter Property="Width" Value="26" />
+        <Setter Property="Height" Value="26" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ToolTip" Value="Remover dos favoritos" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Root"
+                            Background="{StaticResource WarnSoftBrush}"
+                            BorderBrush="{StaticResource WarnBrush}"
+                            BorderThickness="1"
+                            CornerRadius="13">
+                        <Path x:Name="Star"
+                              Data="M 8,1.2 L 10.1,6.1 L 15.4,6.7 L 11.5,10.2 L 12.6,15.4 L 8,12.7 L 3.4,15.4 L 4.5,10.2 L 0.6,6.7 L 5.9,6.1 Z"
+                              Width="12"
+                              Height="12"
+                              Stretch="Uniform"
+                              Fill="{StaticResource WarnBrush}"
+                              Stroke="{StaticResource WarnBrush}"
+                              StrokeThickness="1.2"
+                              StrokeLineJoin="Round"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.85" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.65" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Card de favorito: botão com a mesma pele do Card, para abrir a cotação. -->
+    <Style x:Key="FavoriteCardButton" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Root"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="10"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Top" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>

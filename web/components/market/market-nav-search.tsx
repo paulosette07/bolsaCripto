@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 
+import { assetHref } from '@/lib/market/types';
 import type { AssetSearchResult } from '@/lib/market/types';
 
 import { AssetSearch } from './asset-search';
@@ -13,17 +14,14 @@ export function MarketNavSearch() {
   const [isPending, startTransition] = useTransition();
 
   function handleSelect(result: AssetSearchResult) {
-    const params = new URLSearchParams({
+    const href = assetHref({
       ticker: result.ticker,
-      type: result.assetType
+      assetType: result.assetType,
+      cryptoId: result.cryptoId
     });
 
-    if (result.cryptoId) {
-      params.set('cryptoId', result.cryptoId);
-    }
-
     startTransition(() => {
-      router.push(`/mercado?${params.toString()}`);
+      router.push(href);
     });
   }
 

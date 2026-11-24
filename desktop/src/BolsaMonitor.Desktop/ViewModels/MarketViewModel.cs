@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 
+using BolsaMonitor.Core.Data;
 using BolsaMonitor.Core.Formatting;
 using BolsaMonitor.Core.Market;
 using BolsaMonitor.Core.Models;
@@ -59,11 +60,14 @@ public sealed partial class MarketViewModel : PageViewModel
     private const int DebounceMilliseconds = 320;
 
     private readonly IMarketService _market;
+    private readonly IFavoriteRepository _favorites;
     private CancellationTokenSource? _searchCts;
+    private IReadOnlyList<FavoriteRow> _favoriteRows = Array.Empty<FavoriteRow>();
 
-    public MarketViewModel(IMarketService market)
+    public MarketViewModel(IMarketService market, IFavoriteRepository favorites)
     {
         _market = market;
+        _favorites = favorites;
 
         Ranges = new ObservableCollection<RangeOption>(
             Enum.GetValues<MarketRange>().Select(range => new RangeOption(range, range.ToLabel())));
@@ -81,6 +85,9 @@ public sealed partial class MarketViewModel : PageViewModel
         "Cotações da B3 em reais e criptomoedas em real ou dólar, com histórico interativo.";
 
     public ObservableCollection<AssetSearchResult> Suggestions { get; } = new();
+
+    /// <summary>Cards de favoritos exibidos no topo da área de Mercado.</summary>
+    public ObservableCollection<FavoriteCardItem> Favorites { get; } = new();
 
     public ObservableCollection<RangeOption> Ranges { get; }
 
@@ -135,7 +142,30 @@ public sealed partial class MarketViewModel : PageViewModel
     [ObservableProperty]
     private bool _canSwitchCurrency;
 
+    /// <summary>O ativo aberto está na lista de favoritos.</summary>
+    [ObservableProperty]
+    private bool _isCurrentFavorite;
+
+    /// <summary>Ainda cabe favorito novo — controla a estrela no limite.</summary>
+    [ObservableProperty]
+    private bool _canFavoriteMore = true;
+
+    /// <summary>Aviso quando a tabela `favorites` não está acessível.</summary>
+    [ObservableProperty]
+    private string? _favoritesMessage;
+
     public bool HasSuggestions => Suggestions.Count > 0;
+
+    public bool HasFavorites => Favorites.Count > 0;
+
+    /// <summary>Favoritado sempre pode sair; entrar depende de haver vaga.</summary>
+    public bool CanToggleCurrentFavorite => IsCurrentFavorite || CanFavoriteMore;
+
+    partial void OnIsCurrentFavoriteChanged(bool value) =>
+        OnPropertyChanged(nameof(CanToggleCurrentFavorite));
+
+    partial void OnCanFavoriteMoreChanged(bool value) =>
+        OnPropertyChanged(nameof(CanToggleCurrentFavorite));
 
     /// <summary>Controla a dica de texto dentro do campo de busca.</summary>
     public bool SearchIsEmpty => string.IsNullOrWhiteSpace(SearchText);
@@ -155,6 +185,8 @@ public sealed partial class MarketViewModel : PageViewModel
     public override Task LoadAsync(CancellationToken cancellationToken = default) =>
         RunGuardedAsync(async () =>
         {
+            await LoadFavoritesAsync(cancellationToken).ConfigureAwait(true);
+
             var asset = SelectedAsset is null
                 ? new AssetRef(Ticker, AssetType.Stock, null)
                 : new AssetRef(SelectedAsset.Ticker, SelectedAsset.AssetType, SelectedAsset.CryptoId);
@@ -225,6 +257,128 @@ public sealed partial class MarketViewModel : PageViewModel
     [RelayCommand]
     private Task RefreshAsync() => LoadAsync();
 
+    /// <summary>Estrela do cabeçalho: favorita/desfavorita o ativo aberto.</summary>
+    [RelayCommand]
+    private async Task ToggleCurrentFavoriteAsync()
+    {
+        var asset = SelectedAsset is null
+            ? new AssetRef(Ticker, AssetType.Stock, null)
+            : new AssetRef(SelectedAsset.Ticker, SelectedAsset.AssetType, SelectedAsset.CryptoId);
+
+        await ToggleFavoriteAsync(asset).ConfigureAwait(true);
+    }
+
+    /// <summary>Estrela do card: tira o ativo da lista de favoritos.</summary>
+    [RelayCommand]
+    private async Task ToggleFavoriteCardAsync(FavoriteCardItem? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        await ToggleFavoriteAsync(item.ToAssetRef()).ConfigureAwait(true);
+    }
+
+    /// <summary>Abre a cotação do favorito clicado, como se viesse da busca.</summary>
+    [RelayCommand]
+    private async Task OpenFavoriteAsync(FavoriteCardItem? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        await SelectAssetAsync(new AssetSearchResult(
+            item.Ticker,
+            item.AssetType,
+            item.CryptoId,
+            item.Name,
+            null)).ConfigureAwait(true);
+    }
+
+    private async Task ToggleFavoriteAsync(AssetRef asset)
+    {
+        await RunGuardedAsync(async () =>
+        {
+            // Resolve o id da CoinGecko antes de gravar: favorito sem id não cota.
+            var resolved = await _market.ResolveAssetAsync(asset, CancellationToken.None).ConfigureAwait(true);
+
+            await _favorites.ToggleAsync(resolved, CancellationToken.None).ConfigureAwait(true);
+            await LoadFavoritesAsync(CancellationToken.None).ConfigureAwait(true);
+        }).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Recarrega a faixa de favoritos com as cotações atuais.
+    ///
+    /// Banco ou provider fora do ar não derrubam o Mercado: a faixa mostra o
+    /// aviso (ou os cards sem preço) e a cotação do ativo segue funcionando.
+    /// </summary>
+    private async Task LoadFavoritesAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<FavoriteRow> rows;
+
+        try
+        {
+            rows = await _favorites.ListAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _favoriteRows = Array.Empty<FavoriteRow>();
+            Favorites.Clear();
+            FavoritesMessage = $"Favoritos indisponíveis: {exception.Message}";
+            CanFavoriteMore = false;
+            OnPropertyChanged(nameof(HasFavorites));
+            UpdateCurrentFavoriteState();
+
+            return;
+        }
+
+        FavoritesMessage = null;
+        _favoriteRows = rows;
+
+        IReadOnlyDictionary<string, Quote> quotes = new Dictionary<string, Quote>();
+
+        if (rows.Count > 0)
+        {
+            try
+            {
+                quotes = await _market
+                    .GetQuoteMapAsync(rows.Select(row => row.ToAssetRef()), cancellationToken)
+                    .ConfigureAwait(true);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Sem cotação os cards continuam úteis: mostram o ativo e abrem.
+                quotes = new Dictionary<string, Quote>();
+            }
+        }
+
+        Favorites.Clear();
+
+        foreach (var row in rows)
+        {
+            var key = FavoriteRules.Key(AssetTypeExtensions.FromDbValue(row.AssetType), row.Ticker);
+            quotes.TryGetValue(key, out var quote);
+
+            Favorites.Add(new FavoriteCardItem(row, quote));
+        }
+
+        CanFavoriteMore = rows.Count < FavoriteRules.MaxFavorites;
+        OnPropertyChanged(nameof(HasFavorites));
+        UpdateCurrentFavoriteState();
+    }
+
+    private void UpdateCurrentFavoriteState()
+    {
+        var asset = SelectedAsset is null
+            ? new AssetRef(Ticker, AssetType.Stock, null)
+            : new AssetRef(SelectedAsset.Ticker, SelectedAsset.AssetType, SelectedAsset.CryptoId);
+
+        IsCurrentFavorite = FavoriteRules.IsFavorited(_favoriteRows, asset);
+    }
+
     private async Task SearchDebouncedAsync(string query, CancellationToken cancellationToken)
     {
         if (query.Trim().Length < 2)
@@ -294,6 +448,7 @@ public sealed partial class MarketViewModel : PageViewModel
             .ConfigureAwait(true);
 
         ApplyChart(history.Points, quote.ChangePercent);
+        UpdateCurrentFavoriteState();
     }
 
     [RelayCommand]

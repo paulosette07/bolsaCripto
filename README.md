@@ -16,13 +16,42 @@ Next.js 16 com App Router, React Server Components, Tailwind e Supabase (auth + 
 | Rota | Descrição |
 | --- | --- |
 | `/painel` | Resumo da carteira, melhores e piores variações |
-| `/mercado` | Cotação e gráfico histórico; B3 (Brapi/Yahoo) e cripto (CoinGecko) |
+| `/mercado` | Cotação, gráfico histórico e cards de favoritos; B3 (Brapi/Yahoo) e cripto (CoinGecko) |
 | `/carteira` | Posições, preço médio, resultado |
 | `/alertas` | Alertas de preço com disparo por e-mail |
 
 No mercado, ativos de criptomoeda podem ser cotados em **real ou dólar**
 (`/mercado?ticker=BTC&type=crypto&cryptoId=bitcoin&currency=USD`). Os preços em dólar vêm
 diretamente da CoinGecko (`vs_currency=usd`), não de conversão local; ativos da B3 são sempre em reais.
+
+### Favoritos
+
+Cada usuário pode marcar até **12 ativos** no mercado; eles aparecem como cards no topo da
+tela, com preço e variação do dia, e o card abre a cotação completa. Favoritar não é comprar:
+a lista é independente da carteira, que continua sendo a única fonte de posição e preço médio.
+
+A estrela do mercado e a estrela do card usam a mesma ação de servidor
+(`web/app/actions/favorites.ts`): ela alterna entre inserir e remover, resolve o `crypto_id`
+na CoinGecko antes de gravar e revalida `/mercado`. Falhas são silenciosas de propósito — um
+favorito que não grava não pode derrubar a página de cotação.
+
+O estado vive na tabela `public.favorites` (`web/supabase/migrations/0002_favorites.sql`),
+com RLS por `user_id` e unicidade em `(user_id, ticker, asset_type)`. O app desktop lê e
+escreve a mesma tabela, então a lista é a mesma nas duas aplicações.
+
+### Banco de dados (migrações)
+
+As migrações ficam em `web/supabase/migrations/` e são aplicadas **manualmente** no
+**SQL Editor** do painel do Supabase (não há CLI nem service key no fluxo do dia a dia):
+
+| Arquivo | O que cria |
+| --- | --- |
+| `0001_init.sql` | Tipos `asset_type`/`alert_direction`, tabelas `portfolio` e `alerts`, RLS |
+| `0002_favorites.sql` | Tabela `favorites` (cards de ativos favoritados), RLS e unicidade |
+
+Rode `0002_favorites.sql` depois do `0001_init.sql`. Sem ela a tela de mercado continua
+funcionando, mas mostra um aviso no lugar da seção de favoritos e a estrela não grava.
+Os dois arquivos são idempotentes: rodar de novo não duplica nada.
 
 ### Fonte de dados da B3
 
@@ -128,7 +157,11 @@ No modo demonstração não é necessário Supabase. Sem `--demo`, copie
 A tela **Mercado** também alterna a moeda de criptomoedas entre **Real** e **Dólar**;
 ativos da B3 permanecem em reais porque essa é a única cotação real negociada.
 
+A mesma tela traz a faixa de **Favoritos** em cards: a estrela ao lado do ticker (ou no
+canto do card) alterna o ativo na lista. No modo `--demo` os favoritos vêm de
+`DemoFavoriteRepository`, em memória; fora dele vêm da tabela `favorites`.
+
 ## Testes
 
 - `web`: `npx tsc --noEmit` e `npm run build`.
-- `desktop`: `dotnet test src/BolsaMonitor.Core.Tests` (formatação, carteira, alertas e avaliação de regras).
+- `desktop`: `dotnet test src/BolsaMonitor.Core.Tests` (formatação, carteira, alertas, regras de alerta e de favoritos).
