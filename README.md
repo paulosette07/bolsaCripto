@@ -15,7 +15,7 @@ Next.js 16 com App Router, React Server Components, Tailwind e Supabase (auth + 
 
 | Rota | Descrição |
 | --- | --- |
-| `/painel` | Resumo da carteira, melhores e piores variações |
+| `/painel` | Indicadores do dia, resumo da carteira, notícias por recorte e juros |
 | `/mercado` | Cotação, gráfico histórico e cards de favoritos; B3 (Brapi/Yahoo) e cripto (CoinGecko) |
 | `/carteira` | Posições, preço médio, resultado |
 | `/alertas` | Alertas de preço com disparo por e-mail |
@@ -38,6 +38,29 @@ favorito que não grava não pode derrubar a página de cotação.
 O estado vive na tabela `public.favorites` (`web/supabase/migrations/0002_favorites.sql`),
 com RLS por `user_id` e unicidade em `(user_id, ticker, asset_type)`. O app desktop lê e
 escreve a mesma tabela, então a lista é a mesma nas duas aplicações.
+
+### Indicadores, juros e notícias
+
+O topo do painel mostra quatro indicadores (**dólar, euro, ouro e Ibovespa**), os juros do
+Banco Central (**Selic** e **IPCA**) e as manchetes do dia em três recortes: **Brasil**,
+**Economia** e **Mundo**.
+
+| Bloco | Fonte |
+| --- | --- |
+| Câmbio e ouro | AwesomeAPI (`USD-BRL`, `EUR-BRL`, `XAU-BRL`), sem chave |
+| Ibovespa | Yahoo Finance (`^BVSP`) |
+| Reserva do câmbio | Yahoo (`USDBRL=X`, `EURBRL=X`, `GC=F`) |
+| Selic e IPCA | BCB SGS (`api.bcb.gov.br/dados/serie/bcdata.sgs`) |
+| Notícias | RSS de G1, CNN Brasil, InfoMoney e Google News |
+
+O ouro é exibido **por grama** (a onça-troy tem 31,1034768 g) e o preço da onça em dólar é
+derivado da cotação do dólar do mesmo instante. Cada bloco falha sozinho: se a AwesomeAPI
+cair, o câmbio vem do Yahoo; se uma fonte de notícias cair, as outras continuam. Quando
+nada responde, o bloco simplesmente não aparece — um card a menos é melhor que uma tela de
+erro.
+
+Os endpoints `/api/macro` e `/api/news` (ambos autenticados) expõem os mesmos dados para
+uso fora dos Server Components, com cache de 2 minutos.
 
 ### Banco de dados (migrações)
 
@@ -161,7 +184,13 @@ A mesma tela traz a faixa de **Favoritos** em cards: a estrela ao lado do ticker
 canto do card) alterna o ativo na lista. No modo `--demo` os favoritos vêm de
 `DemoFavoriteRepository`, em memória; fora dele vêm da tabela `favorites`.
 
+O **Painel** repete os blocos da versão web: faixa de indicadores (dólar, euro, ouro por
+grama e Ibovespa), notícias com abas por recorte e os juros do Banco Central. As regras são
+as mesmas (`MacroClient` e `NewsService` em `BolsaMonitor.Core`), inclusive a falha
+independente por fonte; no modo `--demo` entram `DemoMacroService` e `DemoNewsService`, que
+não tocam a rede. As manchetes abrem no navegador padrão.
+
 ## Testes
 
 - `web`: `npx tsc --noEmit` e `npm run build`.
-- `desktop`: `dotnet test src/BolsaMonitor.Core.Tests` (formatação, carteira, alertas, regras de alerta e de favoritos).
+- `desktop`: `dotnet test src/BolsaMonitor.Core.Tests` (formatação, carteira, alertas, regras de alerta e de favoritos, parsing de RSS).

@@ -126,8 +126,7 @@
                 <TextBlock Text="E-mail" Style="{StaticResource Label}" Margin="0,20,0,6" />
                 <TextBox Style="{StaticResource Field}"
                          Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}"
-                         Height="40"
-                         VerticalContentAlignment="Center" />
+                         Height="40" />
 
                 <TextBlock Text="Senha" Style="{StaticResource Label}" Margin="0,14,0,6" />
                 <PasswordBox x:Name="PasswordInput"

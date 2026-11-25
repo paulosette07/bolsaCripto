@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Net.Http;
 
 using BolsaMonitor.Core.Data;
 using BolsaMonitor.Core.Formatting;
 using BolsaMonitor.Core.Market;
 using BolsaMonitor.Core.Models;
+using BolsaMonitor.Core.News;
 using BolsaMonitor.Core.Portfolio;
 using BolsaMonitor.Desktop.Charts;
 
@@ -39,12 +42,22 @@ public sealed partial class DashboardViewModel : PageViewModel
     private readonly IPortfolioRepository _portfolio;
     private readonly IAlertRepository _alerts;
     private readonly IMarketService _market;
+    private readonly IMacroService _macro;
+    private readonly INewsService _news;
+    private readonly Dictionary<NewsScope, IReadOnlyList<NewsItemView>> _newsCache = new();
 
-    public DashboardViewModel(IPortfolioRepository portfolio, IAlertRepository alerts, IMarketService market)
+    public DashboardViewModel(
+        IPortfolioRepository portfolio,
+        IAlertRepository alerts,
+        IMarketService market,
+        IMacroService macro,
+        INewsService news)
     {
         _portfolio = portfolio;
         _alerts = alerts;
         _market = market;
+        _macro = macro;
+        _news = news;
     }
 
     public override string Title => "Painel";
@@ -54,6 +67,22 @@ public sealed partial class DashboardViewModel : PageViewModel
     public ObservableCollection<PositionView> TopPositions { get; } = new();
 
     public ObservableCollection<WatchlistItem> WatchlistItems { get; } = new();
+
+    public ObservableCollection<MacroCardItem> MacroItems { get; } = new();
+
+    public ObservableCollection<MacroRateItem> RateItems { get; } = new();
+
+    public ObservableCollection<NewsItemView> NewsItems { get; } = new();
+
+    [ObservableProperty]
+    private bool _hasMacro;
+
+    [ObservableProperty]
+    private bool _hasNews;
+
+    /// <summary>Recorte de notícias aberto (`brasil`, `economia` ou `mundo`).</summary>
+    [ObservableProperty]
+    private string _selectedNewsScope = "brasil";
 
     [ObservableProperty]
     private string _totalValueText = BrlFormat.Currency(0m);
@@ -144,7 +173,108 @@ public sealed partial class DashboardViewModel : PageViewModel
 
             await LoadFeaturedAsync(featured, cancellationToken).ConfigureAwait(true);
             await LoadWatchlistAsync(cancellationToken).ConfigureAwait(true);
+            await LoadMacroAsync(cancellationToken).ConfigureAwait(true);
+            await LoadNewsAsync(cancellationToken).ConfigureAwait(true);
         });
+
+    /// <summary>
+    /// Indicadores macro e juros. Falha aqui não vira mensagem de erro na tela:
+    /// o painel continua útil com a carteira, apenas sem a faixa do topo.
+    /// </summary>
+    private async Task LoadMacroAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var quotes = await _macro.GetQuotesAsync(cancellationToken).ConfigureAwait(true);
+
+            MacroItems.Clear();
+
+            foreach (var quote in quotes)
+            {
+                MacroItems.Add(MacroCardItem.FromQuote(quote));
+            }
+
+            var rates = await _macro.GetRatesAsync(cancellationToken).ConfigureAwait(true);
+
+            RateItems.Clear();
+
+            foreach (var rate in rates)
+            {
+                RateItems.Add(MacroRateItem.FromRate(rate));
+            }
+        }
+        catch (Exception exception) when (
+            exception is MarketDataException or HttpRequestException or TaskCanceledException)
+        {
+            MacroItems.Clear();
+            RateItems.Clear();
+        }
+
+        HasMacro = MacroItems.Count > 0;
+    }
+
+    /// <summary>Carrega os três recortes de uma vez e exibe o selecionado.</summary>
+    private async Task LoadNewsAsync(CancellationToken cancellationToken)
+    {
+        _newsCache.Clear();
+
+        foreach (var scope in new[] { NewsScope.Brasil, NewsScope.Economia, NewsScope.Mundo })
+        {
+            try
+            {
+                var items = await _news
+                    .GetAsync(scope, NewsService.DefaultLimit, cancellationToken)
+                    .ConfigureAwait(true);
+
+                _newsCache[scope] = items.Select(NewsItemView.FromItem).ToList();
+            }
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+            {
+                _newsCache[scope] = Array.Empty<NewsItemView>();
+            }
+        }
+
+        ApplyNewsScope(SelectedNewsScope.FromSlug());
+    }
+
+    private void ApplyNewsScope(NewsScope scope)
+    {
+        SelectedNewsScope = scope.ToSlug();
+        NewsItems.Clear();
+
+        if (_newsCache.TryGetValue(scope, out var items))
+        {
+            foreach (var item in items)
+            {
+                NewsItems.Add(item);
+            }
+        }
+
+        HasNews = NewsItems.Count > 0;
+    }
+
+    /// <summary>Troca o recorte exibido usando o cache carregado no `LoadAsync`.</summary>
+    [RelayCommand]
+    private void SelectNewsScope(string? scope) => ApplyNewsScope(scope.FromSlug());
+
+    /// <summary>Abre a matéria no navegador padrão.</summary>
+    [RelayCommand]
+    private void OpenNews(NewsItemView? item)
+    {
+        if (item is null || string.IsNullOrWhiteSpace(item.Url))
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(item.Url) { UseShellExecute = true });
+        }
+        catch (Exception)
+        {
+            // Sem navegador disponível: o clique simplesmente não faz nada.
+        }
+    }
 
     /// <summary>Recarrega só a cotação do ativo em destaque (botão Atualizar).</summary>
     [RelayCommand]

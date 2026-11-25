@@ -28,23 +28,68 @@ interface FetchJsonOptions {
 
 const REQUEST_TIMEOUT_MS = 12_000;
 
-export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
+function buildRequest(url: string, options: FetchJsonOptions): { url: string; init: RequestInit } {
   const { revalidateSeconds = 60, noStore = false, headers } = options;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  try {
-    const response = await fetch(url, {
+  return {
+    url,
+    init: {
       headers: {
         accept: 'application/json',
         'user-agent': 'bolsa-monitor/1.0 (+https://github.com)',
         ...headers
       },
-      signal: controller.signal,
       ...(noStore
         ? { cache: 'no-store' as const }
         : { next: { revalidate: revalidateSeconds } })
-    });
+    }
+  };
+}
+
+/** GET de texto (RSS/XML) com o mesmo timeout e tradução de erro do JSON. */
+export async function fetchText(url: string, options: FetchJsonOptions = {}): Promise<string> {
+  const request = buildRequest(url, options);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(request.url, { ...request.init, signal: controller.signal });
+
+    if (!response.ok) {
+      throw new MarketDataError(
+        `Falha ao consultar a fonte de dados (HTTP ${response.status}).`,
+        response.status
+      );
+    }
+
+    return await response.text();
+  } catch (error) {
+    throw toTransportError(error);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/** Traduz falhas de rede/timeout em `MarketDataError` exibível. */
+function toTransportError(error: unknown): MarketDataError {
+  if (error instanceof MarketDataError) {
+    return error;
+  }
+
+  if (error instanceof Error && error.name === 'AbortError') {
+    return new MarketDataError('A fonte de dados demorou demais para responder.', 504);
+  }
+
+  return new MarketDataError('Não foi possível consultar a fonte de dados.', 502);
+}
+
+export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}): Promise<T> {
+  const request = buildRequest(url, options);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(request.url, { ...request.init, signal: controller.signal });
 
     if (!response.ok) {
       throw new MarketDataError(

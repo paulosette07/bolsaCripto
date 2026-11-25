@@ -38,6 +38,8 @@ interface YahooChartMeta {
   regularMarketPrice?: number;
   regularMarketChangePercent?: number;
   chartPreviousClose?: number;
+  regularMarketDayHigh?: number;
+  regularMarketDayLow?: number;
   regularMarketTime?: number;
 }
 
@@ -262,6 +264,75 @@ export async function getYahooHistory(
     cryptoId: null,
     currency: 'BRL',
     points: toHistoryPoints(result)
+  };
+}
+
+/**
+ * Retrato de um símbolo qualquer do Yahoo (índice, moeda, commodity).
+ *
+ * A tela de mercado cota ações da B3 — que precisam do sufixo `.SA`. Índices
+ * (^BVSP) e contratos (GC=F) usam o símbolo literal, por isso este acesso é
+ * separado de `getYahooQuotes`.
+ */
+export interface YahooMarketSnapshot {
+  symbol: string;
+  name: string;
+  price: number;
+  previousClose: number | null;
+  changePercent: number;
+  changeValue: number;
+  dayLow: number | null;
+  dayHigh: number | null;
+  currency: string;
+  updatedAt: string;
+}
+
+export async function getYahooSnapshot(
+  symbol: string,
+  options: { noStore?: boolean } = {}
+): Promise<YahooMarketSnapshot> {
+  const normalized = symbol.trim().toUpperCase();
+  const result = await fetchChart(normalized, '1d', '1d', options);
+  const meta = result.meta;
+  const price = meta?.regularMarketPrice;
+
+  if (!meta || typeof price !== 'number' || !Number.isFinite(price)) {
+    throw new MarketDataError(`Sem cotação para "${normalized}".`, 404);
+  }
+
+  const previousClose =
+    typeof meta.chartPreviousClose === 'number' && Number.isFinite(meta.chartPreviousClose)
+      ? meta.chartPreviousClose
+      : null;
+
+  const changePercent =
+    typeof meta.regularMarketChangePercent === 'number' &&
+    Number.isFinite(meta.regularMarketChangePercent)
+      ? meta.regularMarketChangePercent
+      : previousClose && previousClose !== 0
+        ? ((price - previousClose) / previousClose) * 100
+        : 0;
+
+  return {
+    symbol: meta.symbol ?? normalized,
+    name: meta.longName?.trim() || meta.shortName?.trim() || normalized,
+    price,
+    previousClose,
+    changePercent,
+    changeValue: previousClose !== null ? price - previousClose : 0,
+    dayLow:
+      typeof meta.regularMarketDayLow === 'number' && Number.isFinite(meta.regularMarketDayLow)
+        ? meta.regularMarketDayLow
+        : null,
+    dayHigh:
+      typeof meta.regularMarketDayHigh === 'number' && Number.isFinite(meta.regularMarketDayHigh)
+        ? meta.regularMarketDayHigh
+        : null,
+    currency: meta.currency ?? 'BRL',
+    updatedAt:
+      typeof meta.regularMarketTime === 'number'
+        ? new Date(meta.regularMarketTime * 1000).toISOString()
+        : new Date().toISOString()
   };
 }
 

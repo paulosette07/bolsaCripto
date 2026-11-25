@@ -43,6 +43,49 @@
                            TextWrapping="Wrap" />
             </Border>
 
+            <!--
+                Faixa de indicadores do dia: dólar, euro, ouro (R$/g) e Ibovespa.
+                Só aparece quando pelo menos um provedor respondeu.
+            -->
+            <ItemsControl ItemsSource="{Binding MacroItems}"
+                          Margin="0,0,-10,14"
+                          Visibility="{Binding HasMacro, Converter={StaticResource BoolToVisible}}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="4" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource CardFlat}" Margin="0,0,10,0">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Label}" Style="{StaticResource Caption}" FontSize="10" />
+                                <TextBlock Text="{Binding ValueText}"
+                                           Style="{StaticResource Numeric}"
+                                           FontSize="17"
+                                           FontWeight="SemiBold"
+                                           Margin="0,4,0,0"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding ChangePercent, Converter={StaticResource Percent}}"
+                                           FontFamily="{StaticResource NumericFont}"
+                                           FontSize="11"
+                                           Margin="0,3,0,0"
+                                           Foreground="{Binding ChangePercent, Converter={StaticResource ChangeBrush}}" />
+                                <TextBlock Text="{Binding Subtitle}"
+                                           Style="{StaticResource Caption}"
+                                           Margin="0,5,0,0"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding RangeText}"
+                                           Style="{StaticResource Caption}"
+                                           Margin="0,1,0,0"
+                                           TextTrimming="CharacterEllipsis"
+                                           Visibility="{Binding RangeText, Converter={StaticResource NullToVisible}}" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
             <UniformGrid Columns="3" Margin="0,0,0,14">
                 <Border Style="{StaticResource Card}" Margin="0,0,10,0">
                     <StackPanel>
@@ -247,6 +290,135 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!--
+                Notícias com abas por recorte e, ao lado, juros e inflação.
+                As manchetes chegam prontas do view-model (sem busca no cliente).
+            -->
+            <Grid Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.6*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource Card}" Margin="0,0,7,0">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock Text="Notícias" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Text="O que mexe com o mercado hoje"
+                                           Style="{StaticResource Caption}"
+                                           Margin="0,3,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <RadioButton Style="{StaticResource ScopeTab}"
+                                             GroupName="news-scope"
+                                             Content="Brasil"
+                                             Command="{Binding SelectNewsScopeCommand}"
+                                             CommandParameter="brasil"
+                                             IsChecked="{Binding SelectedNewsScope, Mode=OneWay, Converter={StaticResource Equals}, ConverterParameter=brasil}" />
+                                <RadioButton Style="{StaticResource ScopeTab}"
+                                             GroupName="news-scope"
+                                             Content="Economia"
+                                             Command="{Binding SelectNewsScopeCommand}"
+                                             CommandParameter="economia"
+                                             IsChecked="{Binding SelectedNewsScope, Mode=OneWay, Converter={StaticResource Equals}, ConverterParameter=economia}" />
+                                <RadioButton Style="{StaticResource ScopeTab}"
+                                             GroupName="news-scope"
+                                             Content="Mundo"
+                                             Margin="0"
+                                             Command="{Binding SelectNewsScopeCommand}"
+                                             CommandParameter="mundo"
+                                             IsChecked="{Binding SelectedNewsScope, Mode=OneWay, Converter={StaticResource Equals}, ConverterParameter=mundo}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{Binding NewsItems}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource NewsRowButton}"
+                                            Command="{Binding DataContext.OpenNewsCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontSize="12"
+                                                       Foreground="{StaticResource InkBrush}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Meta}"
+                                                       Style="{StaticResource Caption}"
+                                                       Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Nenhuma notícia disponível agora."
+                                   Style="{StaticResource PageSubtitle}"
+                                   Margin="0,4,0,0"
+                                   Visibility="{Binding HasNews, Converter={StaticResource InverseBoolToVisible}}" />
+
+                        <TextBlock Text="Fontes: G1, CNN Brasil, InfoMoney · atualizado a cada 5 min"
+                                   Style="{StaticResource Caption}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Style="{StaticResource Card}"
+                        Margin="7,0,0,0"
+                        VerticalAlignment="Top">
+                    <StackPanel>
+                        <TextBlock Text="Juros e inflação" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Text="Referência do Banco Central"
+                                   Style="{StaticResource Caption}"
+                                   Margin="0,3,0,12" />
+
+                        <ItemsControl ItemsSource="{Binding RateItems}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Label}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource InkBrush}" />
+                                            <TextBlock Text="{Binding Detail}"
+                                                       Style="{StaticResource Caption}"
+                                                       TextWrapping="Wrap"
+                                                       MaxWidth="170"
+                                                       HorizontalAlignment="Left" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding ValueText}"
+                                                   Style="{StaticResource Numeric}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="8,0,0,0" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Selic é a taxa básica definida pelo Copom; o IPCA é a inflação oficial do país."
+                                   Style="{StaticResource Caption}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,4,0,0" />
                     </StackPanel>
                 </Border>
             </Grid>

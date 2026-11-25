@@ -216,7 +216,7 @@ export function PriceChart({
 
               <YAxis
                 domain={['auto', 'auto']}
-                tickFormatter={(value: number) => formatPriceAxis(value, currency)}
+                tickFormatter={(value: number) => formatPriceAxis(value)}
                 tick={{ fill: '#71717A', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}

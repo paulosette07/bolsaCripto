@@ -6,6 +6,7 @@ using BolsaMonitor.Core.Alerts;
 using BolsaMonitor.Core.Data;
 using BolsaMonitor.Core.Email;
 using BolsaMonitor.Core.Market;
+using BolsaMonitor.Core.News;
 using BolsaMonitor.Core.Options;
 using BolsaMonitor.Core.Persistence;
 using BolsaMonitor.Desktop.Demo;
@@ -154,6 +155,8 @@ public partial class App : Application
         if (isDemo)
         {
             services.AddSingleton<IMarketService, DemoMarketService>();
+            services.AddSingleton<IMacroService, DemoMacroService>();
+            services.AddSingleton<INewsService, DemoNewsService>();
             services.AddSingleton<IPortfolioRepository, DemoPortfolioRepository>();
             services.AddSingleton<IFavoriteRepository, DemoFavoriteRepository>();
             services.AddSingleton<IAlertRepository, DemoAlertRepository>();
@@ -167,6 +170,14 @@ public partial class App : Application
             services.AddSingleton<IPortfolioRepository, PortfolioRepository>();
             services.AddSingleton<IFavoriteRepository, FavoriteRepository>();
             services.AddSingleton<IAlertRepository, AlertRepository>();
+
+            // Yahoo atende índice/câmbio/commodity e é a reserva do câmbio; tem
+            // HttpClient próprio porque o host muda em caso de rate limit.
+            services.AddSingleton(_ => new YahooClient(new HttpClient()));
+            services.AddSingleton<IMacroService>(provider => new MacroClient(
+                new HttpClient(),
+                provider.GetRequiredService<YahooClient>()));
+            services.AddSingleton<INewsService>(_ => new NewsService(new HttpClient()));
         }
 
         services.AddTransient<LoginViewModel>();

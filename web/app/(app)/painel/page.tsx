@@ -10,13 +10,22 @@ import {
 } from 'lucide-react';
 
 import { PriceChart } from '@/components/charts/price-chart';
+import { MacroStrip } from '@/components/dashboard/macro-strip';
+import { RatesCard } from '@/components/dashboard/rates-card';
 import { StatCard } from '@/components/dashboard/stat-card';
+import { NewsBoard } from '@/components/news/news-board';
 import { buttonClasses } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { ChangePill } from '@/components/ui/delta';
 import { formatCurrency, formatPercent, formatPrice, toNumber } from '@/lib/format';
 import { getHistory, getQuoteMap } from '@/lib/market';
+import { getMacroQuotes } from '@/lib/market/macro';
+import { getMacroRates } from '@/lib/market/rates';
+import type { MacroQuote } from '@/lib/market/macro';
+import type { MacroRate } from '@/lib/market/rates';
 import type { AssetRef } from '@/lib/market/types';
+import { getNewsBoard } from '@/lib/news';
+import type { NewsBoard as NewsBoardData } from '@/lib/news/types';
 import { buildPositions, summarizePositions, withWeights } from '@/lib/portfolio';
 import { createClient } from '@/lib/supabase/server';
 
@@ -25,6 +34,29 @@ export const metadata: Metadata = {
 };
 
 const MAX_POSITIONS_SHOWN = 5;
+
+const EMPTY_NEWS: NewsBoardData = { brasil: [], economia: [], mundo: [] };
+
+interface MarketContext {
+  macroQuotes: MacroQuote[];
+  macroRates: MacroRate[];
+  news: NewsBoardData;
+}
+
+/**
+ * Carrega o contexto de mercado (indicadores, juros e notícias).
+ * Cada bloco falha em silêncio: um provedor fora do ar não pode esconder a
+ * carteira do usuário.
+ */
+async function loadMarketContext(): Promise<MarketContext> {
+  const [macroQuotes, macroRates, news] = await Promise.all([
+    getMacroQuotes().catch(() => [] as MacroQuote[]),
+    getMacroRates().catch(() => [] as MacroRate[]),
+    getNewsBoard().catch(() => EMPTY_NEWS)
+  ]);
+
+  return { macroQuotes, macroRates, news };
+}
 
 function EmptyPortfolio() {
   return (
@@ -60,7 +92,7 @@ export default async function DashboardPage() {
     return null;
   }
 
-  const [{ data: portfolioRows }, { data: alertRows }] = await Promise.all([
+  const [{ data: portfolioRows }, { data: alertRows }, market] = await Promise.all([
     supabase
       .from('portfolio')
       .select('*')
@@ -71,7 +103,8 @@ export default async function DashboardPage() {
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false }),
+    loadMarketContext()
   ]);
 
   const rows = portfolioRows ?? [];
@@ -102,7 +135,16 @@ export default async function DashboardPage() {
           <h1 className="text-xl font-semibold tracking-tight text-ink">Painel</h1>
           <p className="mt-1 text-sm text-ink-muted">Bem-vindo ao seu monitor de mercado.</p>
         </header>
+
+        <MacroStrip quotes={market.macroQuotes} />
+
         <EmptyPortfolio />
+
+        <section className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.55fr_1fr]">
+          <NewsBoard board={market.news} />
+          <RatesCard rates={market.macroRates} />
+        </section>
+
         <Card>
           <CardHeader
             title="Alertas de preço"
@@ -165,6 +207,8 @@ export default async function DashboardPage() {
           Gerenciar carteira
         </Link>
       </header>
+
+      <MacroStrip quotes={market.macroQuotes} />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -315,6 +359,11 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </Card>
+      </section>
+
+      <section className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[1.55fr_1fr]">
+        <NewsBoard board={market.news} />
+        <RatesCard rates={market.macroRates} />
       </section>
 
       {alerts.length > 0 ? (

@@ -22,6 +22,7 @@
             <conv:NullToVisibilityConverter x:Key="NullToVisible" />
             <conv:CountToVisibilityConverter x:Key="CountToVisible" />
             <conv:InverseBoolConverter x:Key="InverseBool" />
+            <conv:EqualsConverter x:Key="Equals" />
 
             <!-- Cada página é resolvida pela ViewModel: a shell só troca o Content. -->
             <DataTemplate DataType="{x:Type vm:DashboardViewModel}">

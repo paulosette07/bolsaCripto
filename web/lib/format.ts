@@ -131,12 +131,10 @@ export function formatCurrencyCompact(
 
 /**
  * Preço sem o símbolo da moeda, para eixos de gráfico — o símbolo fica no
- * título do gráfico e repeti-lo em cada tick polui a leitura.
+ * título do gráfico e repeti-lo em cada tick polui a leitura. Por isso não
+ * recebe moeda: o tick é sempre só o número.
  */
-export function formatPriceAxis(
-  value: number | null | undefined,
-  currency: Currency = DEFAULT_CURRENCY
-): string {
+export function formatPriceAxis(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return '—';
   }
@@ -246,6 +244,80 @@ export function formatRelativeTime(iso: string | null | undefined): string {
   }
 
   return formatter.format(Math.round(diffSeconds / 86400), 'day');
+}
+
+/**
+ * Horário de notícia: `hoje, 14:32` / `ontem, 09:05` / `23/11, 08:10`.
+ *
+ * Determinístico a partir do ISO (nada de "há 3 minutos"), para o HTML do
+ * servidor e o do cliente baterem sem aviso de hidratação.
+ */
+export function formatNewsTime(iso: string | null | undefined, now: Date = new Date()): string {
+  if (!iso) {
+    return '';
+  }
+
+  const date = new Date(iso);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const timeZone = 'America/Sao_Paulo';
+  const dayKey = (value: Date) =>
+    new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone }).format(value);
+  const clock = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone
+  }).format(date);
+
+  if (dayKey(date) === dayKey(now)) {
+    return `hoje, ${clock}`;
+  }
+
+  const yesterday = new Date(now.getTime() - 86_400_000);
+
+  if (dayKey(date) === dayKey(yesterday)) {
+    return `ontem, ${clock}`;
+  }
+
+  const day = new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone
+  }).format(date);
+
+  return `${day}, ${clock}`;
+}
+
+/** `13,75% a.a.` — percentual com vírgula, sem sinal. */
+export function formatRate(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '—';
+  }
+
+  return `${percentFormatter.format(value)}% a.a.`;
+}
+
+/** `09/12/2026` a partir de ISO `YYYY-MM-DD`; vazio quando não há data. */
+export function formatIsoDate(iso: string | null | undefined): string {
+  if (!iso) {
+    return '';
+  }
+
+  const date = new Date(`${iso}T12:00:00Z`);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'UTC'
+  }).format(date);
 }
 
 /** Converte `numeric` do PostgREST (string) para número com segurança. */
