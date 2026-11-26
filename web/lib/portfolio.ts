@@ -1,6 +1,8 @@
 import { toNumber } from '@/lib/format';
 import { assetKey } from '@/lib/market';
-import type { Quote } from '@/lib/market/types';
+import type { Currency, Quote } from '@/lib/market/types';
+import { BASE_CURRENCY, convertAmount, DEFAULT_MONEY_CONTEXT } from '@/lib/money';
+import type { MoneyContext } from '@/lib/money';
 import type { AssetType, PortfolioRow } from '@/lib/types/database';
 
 /**
@@ -8,6 +10,11 @@ import type { AssetType, PortfolioRow } from '@/lib/types/database';
  *
  * Puro de propósito (sem Supabase, sem React): é a mesma matemática que o app
  * WPF precisa reproduzir, e é o que os testes cobrem.
+ *
+ * Moeda: `portfolio.avg_price` é gravado em reais (moeda em que o usuário
+ * digitou). Quando a exibição é em dólar, preço médio, custo, valor de mercado
+ * e resultado são convertidos com a taxa corrente — assim a soma das posições
+ * fecha com o patrimônio mostrado no topo da página.
  */
 
 export interface Position {
@@ -19,7 +26,14 @@ export interface Position {
   logoUrl: string | null;
   /** Quantidade de cotas (bolsa) ou fração (cripto). */
   quantity: number;
+  /** Preço médio pago, já na moeda de exibição. */
   avgPrice: number | null;
+  /**
+   * Preço médio como está gravado (reais). O formulário de edição usa este
+   * valor: regravar o número convertido corromperia o custo a cada visita.
+   */
+  avgPriceBase: number | null;
+  /** Cotação atual, já na moeda de exibição. */
   price: number | null;
   changePercent: number | null;
   /** quantity × price. `null` quando não há cotação. */
@@ -32,15 +46,19 @@ export interface Position {
   weight: number | null;
   notes: string | null;
   hasQuote: boolean;
+  /** Moeda em que os valores monetários desta posição estão expressos. */
+  currency: Currency;
 }
 
 export interface PortfolioSummary {
+  /** Moeda de todos os totais abaixo. */
+  currency: Currency;
   totalValue: number;
   /** Soma do custo apenas das posições que têm preço médio. */
   totalCost: number;
   totalProfit: number;
   totalProfitPercent: number | null;
-  /** Variação do dia em R$, derivada do changeValue de cada cotação. */
+  /** Variação do dia, na moeda de exibição. */
   dayChangeValue: number;
   dayChangePercent: number | null;
   positionsCount: number;
@@ -53,16 +71,28 @@ export interface PortfolioSummary {
 
 export function buildPositions(
   rows: readonly PortfolioRow[],
-  quotes: ReadonlyMap<string, Quote>
+  quotes: ReadonlyMap<string, Quote>,
+  context: MoneyContext = DEFAULT_MONEY_CONTEXT
 ): Position[] {
   const positions: Position[] = [];
+  const { currency, usdBrl } = context;
 
   for (const row of rows) {
     const quantity = toNumber(row.quantity) ?? 0;
-    const avgPrice = toNumber(row.avg_price);
+    const rawAvgPrice = toNumber(row.avg_price);
     const quote = quotes.get(assetKey(row.asset_type, row.ticker));
 
-    const price = quote?.price ?? null;
+    // Cotação vem na moeda em que foi pedida; o preço médio vem do banco em BRL.
+    const price =
+      quote === null || quote === undefined
+        ? null
+        : convertAmount(quote.price, quote.currency, currency, usdBrl);
+
+    const avgPrice =
+      rawAvgPrice === null
+        ? null
+        : convertAmount(rawAvgPrice, BASE_CURRENCY, currency, usdBrl);
+
     const marketValue = price === null ? null : quantity * price;
     const cost = avgPrice === null ? null : quantity * avgPrice;
     const profit = marketValue !== null && cost !== null ? marketValue - cost : null;
@@ -78,6 +108,7 @@ export function buildPositions(
       logoUrl: quote?.logoUrl ?? null,
       quantity,
       avgPrice,
+      avgPriceBase: rawAvgPrice,
       price,
       changePercent: quote?.changePercent ?? null,
       marketValue,
@@ -86,7 +117,8 @@ export function buildPositions(
       profitPercent,
       weight: null,
       notes: row.notes,
-      hasQuote: quote !== undefined
+      hasQuote: quote !== undefined,
+      currency
     });
   }
 
@@ -151,6 +183,7 @@ export function summarizePositions(positions: readonly Position[]): PortfolioSum
   const dayChangePercent = previousValue > 0 ? (dayChangeValue / previousValue) * 100 : null;
 
   return {
+    currency: positions[0]?.currency ?? BASE_CURRENCY,
     totalValue,
     totalCost,
     totalProfit,

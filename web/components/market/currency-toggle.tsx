@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 
+import { persistDisplayCurrencyAction } from '@/app/actions/settings';
 import type { AssetRef, Currency } from '@/lib/market/types';
 import { CURRENCIES, CURRENCY_LABELS, CURRENCY_SYMBOLS } from '@/lib/market/types';
 
@@ -15,9 +16,14 @@ interface CurrencyToggleProps {
 /**
  * Alterna a moeda de exibição de uma cripto (real ↔ dólar).
  *
- * A escolha vive na URL (`?currency=usd`), não em estado local: o server
- * component busca a cotação já na moeda certa e o link fica compartilhável.
- * Só é renderizado para cripto — a B3 não negocia em dólar.
+ * Duas coisas acontecem ao clicar:
+ *  1. a URL muda (`?currency=usd`) para a cotação e o gráfico virem certos;
+ *  2. a escolha é gravada como preferência do app — é o "sempre exibir em
+ *     dólar" das configurações, só que em um clique, no lugar onde a decisão
+ *     acontece.
+ *
+ * Ação de servidor primeiro: se a navegação falhar, a preferência já está
+ * salva e a próxima página abre na moeda escolhida.
  */
 export function CurrencyToggle({ asset, currency }: CurrencyToggleProps) {
   const router = useRouter();
@@ -38,7 +44,8 @@ export function CurrencyToggle({ asset, currency }: CurrencyToggleProps) {
       params.set('cryptoId', asset.cryptoId);
     }
 
-    startTransition(() => {
+    startTransition(async () => {
+      await persistDisplayCurrencyAction(nextCurrency);
       router.push(`/mercado?${params.toString()}`);
     });
   }
@@ -59,7 +66,7 @@ export function CurrencyToggle({ asset, currency }: CurrencyToggleProps) {
               type="button"
               onClick={() => selectCurrency(option)}
               aria-pressed={isActive}
-              title={`Ver preço em ${CURRENCY_LABELS[option].toLowerCase()}`}
+              title={`Ver preço em ${CURRENCY_LABELS[option].toLowerCase()} (vira o padrão do app)`}
               className={`inline-flex items-center gap-1 rounded-[6px] px-2.5 py-1 text-xs font-medium transition-colors ${
                 isActive
                   ? 'bg-surface-3 text-ink'

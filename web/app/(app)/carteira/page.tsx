@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Coins, PieChart, TrendingUp, Wallet } from 'lucide-react';
 
+import { AutoRefresh } from '@/components/layout/auto-refresh';
 import { PositionForm } from '@/components/portfolio/position-form';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { deletePositionAction, savePositionAction } from '@/app/actions/portfolio';
@@ -10,7 +11,9 @@ import { ChangePill } from '@/components/ui/delta';
 import { formatCurrency, formatPercent, formatPrice, formatQuantity } from '@/lib/format';
 import { getQuoteMap } from '@/lib/market';
 import type { AssetRef } from '@/lib/market/types';
+import { quoteMapInCurrency } from '@/lib/money';
 import { buildPositions, summarizePositions, withWeights } from '@/lib/portfolio';
+import { getMoneyContext } from '@/lib/preferences/display-currency';
 import { createClient } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
@@ -41,15 +44,20 @@ export default async function PortfolioPage() {
     cryptoId: row.crypto_id
   }));
 
+  // Moeda de exibição escolhida em Configurações: cripto vem nela e os ativos
+  // da B3 são convertidos pela PTAX quando a exibição é em dólar.
+  const money = await getMoneyContext();
+
   let quotes: Awaited<ReturnType<typeof getQuoteMap>> = new Map();
 
   try {
-    quotes = await getQuoteMap(assetRefs);
+    const raw = await getQuoteMap(assetRefs, { currency: money.currency });
+    quotes = quoteMapInCurrency(raw, money.currency, money.usdBrl);
   } catch {
     quotes = new Map();
   }
 
-  const basePositions = buildPositions(portfolioRows, quotes);
+  const basePositions = buildPositions(portfolioRows, quotes, money);
   const baseSummary = summarizePositions(basePositions);
   const positions = withWeights(basePositions, baseSummary.totalValue);
   const summary = summarizePositions(positions);
@@ -62,17 +70,22 @@ export default async function PortfolioPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Carteira</h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          Quantidade exata de cotas e frações, com valor de mercado atualizado.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">Carteira</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            Valores em {summary.currency === 'USD' ? 'dólares' : 'reais'}
+            {summary.currency === 'USD' ? ' (bolsa convertida pela PTAX)' : ''}.
+          </p>
+        </div>
+
+        <AutoRefresh label="Carteira" />
       </header>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Patrimônio"
-          value={formatCurrency(summary.totalValue)}
+          value={formatCurrency(summary.totalValue, summary.currency)}
           hint={`${summary.positionsCount} ${
             summary.positionsCount === 1 ? 'ativo' : 'ativos'
           } · ${summary.missingQuotesCount} sem cotação`}
@@ -81,14 +94,14 @@ export default async function PortfolioPage() {
 
         <StatCard
           label="Custo investido"
-          value={formatCurrency(summary.totalCost)}
+          value={formatCurrency(summary.totalCost, summary.currency)}
           hint={summary.totalCost > 0 ? 'Soma do preço médio × quantidade' : 'Sem preço médio informado'}
           icon={<Coins className="size-3.5" aria-hidden="true" />}
         />
 
         <StatCard
           label="Resultado"
-          value={formatCurrency(summary.totalProfit)}
+          value={formatCurrency(summary.totalProfit, summary.currency)}
           tone={summary.totalProfit > 0 ? 'up' : summary.totalProfit < 0 ? 'down' : 'neutral'}
           hint={
             summary.totalProfitPercent !== null
@@ -191,7 +204,7 @@ export default async function PortfolioPage() {
                       </td>
 
                       <td className="numeric px-3 py-3 text-right text-ink">
-                        {formatPrice(position.price)}
+                        {formatPrice(position.price, position.currency)}
                       </td>
 
                       <td className="px-3 py-3 text-right">
@@ -199,7 +212,7 @@ export default async function PortfolioPage() {
                       </td>
 
                       <td className="numeric px-3 py-3 text-right font-medium text-ink">
-                        {formatCurrency(position.marketValue)}
+                        {formatCurrency(position.marketValue, position.currency)}
                       </td>
 
                       <td
@@ -211,7 +224,9 @@ export default async function PortfolioPage() {
                               : 'text-down'
                         }`}
                       >
-                        {position.profit === null ? '—' : formatCurrency(position.profit)}
+                        {position.profit === null
+                          ? '—'
+                          : formatCurrency(position.profit, position.currency)}
                         {position.profitPercent !== null ? (
                           <span className="block text-[11px] opacity-80">
                             {formatPercent(position.profitPercent)}
@@ -253,7 +268,7 @@ export default async function PortfolioPage() {
                                   className="label"
                                   htmlFor={`avg-${position.id}`}
                                 >
-                                  Preço médio
+                                  Preço médio (R$)
                                 </label>
                                 <input
                                   id={`avg-${position.id}`}
@@ -261,7 +276,7 @@ export default async function PortfolioPage() {
                                   type="number"
                                   step="any"
                                   min="0"
-                                  defaultValue={position.avgPrice ?? ''}
+                                  defaultValue={position.avgPriceBase ?? ''}
                                   placeholder="opcional"
                                   className="field"
                                 />

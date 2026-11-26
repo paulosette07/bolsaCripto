@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { PriceChart } from '@/components/charts/price-chart';
+import { AutoRefresh } from '@/components/layout/auto-refresh';
 import { MacroStrip } from '@/components/dashboard/macro-strip';
 import { RatesCard } from '@/components/dashboard/rates-card';
 import { StatCard } from '@/components/dashboard/stat-card';
@@ -26,7 +27,9 @@ import type { MacroRate } from '@/lib/market/rates';
 import type { AssetRef } from '@/lib/market/types';
 import { getNewsBoard } from '@/lib/news';
 import type { NewsBoard as NewsBoardData } from '@/lib/news/types';
+import { quoteMapInCurrency } from '@/lib/money';
 import { buildPositions, summarizePositions, withWeights } from '@/lib/portfolio';
+import { getMoneyContext } from '@/lib/preferences/display-currency';
 import { createClient } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
@@ -110,6 +113,9 @@ export default async function DashboardPage() {
   const rows = portfolioRows ?? [];
   const alerts = alertRows ?? [];
 
+  // Moeda escolhida em Configurações: cripto vem nela, bolsa é convertida.
+  const money = await getMoneyContext();
+
   const assetRefs: AssetRef[] = rows.map((row) => ({
     ticker: row.ticker,
     assetType: row.asset_type,
@@ -120,12 +126,13 @@ export default async function DashboardPage() {
   let quotes: Awaited<ReturnType<typeof getQuoteMap>> = new Map();
 
   try {
-    quotes = await getQuoteMap(assetRefs);
+    const raw = await getQuoteMap(assetRefs, { currency: money.currency });
+    quotes = quoteMapInCurrency(raw, money.currency, money.usdBrl);
   } catch {
     quotes = new Map();
   }
 
-  const positions = buildPositions(rows, quotes);
+  const positions = buildPositions(rows, quotes, money);
   const summary = summarizePositions(positions);
 
   if (positions.length === 0) {
@@ -203,9 +210,12 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        <Link href="/carteira" className={buttonClasses('secondary', 'sm')}>
-          Gerenciar carteira
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <AutoRefresh label="Painel" />
+          <Link href="/carteira" className={buttonClasses('secondary', 'sm')}>
+            Gerenciar carteira
+          </Link>
+        </div>
       </header>
 
       <MacroStrip quotes={market.macroQuotes} />
@@ -213,16 +223,18 @@ export default async function DashboardPage() {
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Patrimônio"
-          value={formatCurrency(summary.totalValue)}
+          value={formatCurrency(summary.totalValue, summary.currency)}
           hint={
-            summary.totalCost > 0 ? `Custo investido: ${formatCurrency(summary.totalCost)}` : undefined
+            summary.totalCost > 0
+              ? `Custo investido: ${formatCurrency(summary.totalCost, summary.currency)}`
+              : `Valores em ${summary.currency === 'USD' ? 'dólares' : 'reais'}`
           }
           icon={<CircleDollarSign className="size-3.5" aria-hidden="true" />}
         />
 
         <StatCard
           label="Variação do dia"
-          value={formatCurrency(summary.dayChangeValue)}
+          value={formatCurrency(summary.dayChangeValue, summary.currency)}
           tone={dayTone}
           hint={
             summary.dayChangePercent !== null
@@ -234,7 +246,7 @@ export default async function DashboardPage() {
 
         <StatCard
           label="Resultado"
-          value={formatCurrency(summary.totalProfit)}
+          value={formatCurrency(summary.totalProfit, summary.currency)}
           tone={profitTone}
           hint={
             summary.totalProfitPercent !== null
@@ -291,6 +303,7 @@ export default async function DashboardPage() {
                 initialRange="1mo"
                 initialPoints={featuredPoints}
                 changePercent={featured.changePercent}
+                currency={featured.assetType === 'crypto' ? featured.currency : 'BRL'}
                 height={260}
               />
             ) : (
@@ -331,7 +344,10 @@ export default async function DashboardPage() {
                     <p className="truncate text-sm font-medium text-ink">{position.ticker}</p>
                     <p className="truncate text-[11px] text-ink-faint">
                       {position.hasQuote
-                        ? `${formatQuantityShort(position.quantity)} × ${formatPrice(position.price)}`
+                        ? `${formatQuantityShort(position.quantity)} × ${formatPrice(
+                            position.price,
+                            position.currency
+                          )}`
                         : 'Sem cotação'}
                     </p>
                   </div>
@@ -339,7 +355,7 @@ export default async function DashboardPage() {
 
                 <div className="shrink-0 text-right">
                   <p className="numeric text-sm font-medium text-ink">
-                    {formatCurrency(position.marketValue)}
+                    {formatCurrency(position.marketValue, position.currency)}
                   </p>
                   <div className="mt-0.5 flex justify-end">
                     <ChangePill value={position.changePercent} />

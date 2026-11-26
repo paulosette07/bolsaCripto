@@ -43,9 +43,16 @@ interface YahooChartMeta {
   regularMarketTime?: number;
 }
 
+interface YahooDividendRawEntry {
+  amount?: number;
+  /** Epoch em segundos do ex-date. */
+  date?: number;
+}
+
 interface YahooChartResult {
   meta?: YahooChartMeta;
   timestamp?: readonly number[];
+  events?: { dividends?: Record<string, YahooDividendRawEntry> };
   indicators?: { quote?: readonly { close?: readonly (number | null)[] }[] };
 }
 
@@ -381,4 +388,102 @@ export async function searchYahooStocks(query: string, limit = 10): Promise<Asse
   }
 
   return results;
+}
+/** Provento (dividendo/rendimento) informado pelo Yahoo, já em ms. */
+export interface YahooDividendEvent {
+  /** Ex-date do provento, epoch em milissegundos. */
+  timestamp: number;
+  /** Valor por cota, na moeda do papel (BRL para a B3). */
+  amount: number;
+}
+
+interface YahooDividendChartResponse {
+  chart?: {
+    result?: readonly YahooChartResult[] | null;
+    error?: { code?: string; description?: string } | null;
+  };
+}
+
+function toDividendEvents(result: YahooChartResult): YahooDividendEvent[] {
+  const events = result.events?.dividends;
+
+  if (!events) {
+    return [];
+  }
+
+  const parsed: YahooDividendEvent[] = [];
+
+  for (const entry of Object.values(events)) {
+    const timestamp = entry.date;
+    const amount = entry.amount;
+
+    if (typeof timestamp !== 'number' || typeof amount !== 'number') {
+      continue;
+    }
+
+    if (!Number.isFinite(timestamp) || !Number.isFinite(amount) || amount <= 0) {
+      continue;
+    }
+
+    parsed.push({ timestamp: timestamp * 1000, amount });
+  }
+
+  return parsed.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+/**
+ * Proventos dos últimos dois anos de um papel da B3.
+ *
+ * O `chart` com `events=div` devolve a série de dividendos junto do histórico —
+ * é o único endpoint do Yahoo que ainda responde sem crumb/cookie, e por isso
+ * é o que sustenta a seção de dividendos da tela de mercado.
+ *
+ * Dois anos de janela bastam para calcular 12 meses de proventos e inferir a
+ * periodicidade (mensal, trimestral, semestral ou anual).
+ */
+export async function getYahooDividends(
+  ticker: string,
+  options: { noStore?: boolean } = {}
+): Promise<YahooDividendEvent[]> {
+  const symbol = toYahooSymbol(ticker);
+  let lastError: MarketDataError | null = null;
+
+  for (const host of YAHOO_HOSTS) {
+    try {
+      const params = new URLSearchParams({ range: '2y', interval: '1mo', events: 'div' });
+
+      const payload = await fetchJson<YahooDividendChartResponse>(
+        `${host}/v8/finance/chart/${encodeURIComponent(symbol)}?${params.toString()}`,
+        {
+          revalidateSeconds: 3600,
+          noStore: options.noStore,
+          headers: REQUEST_HEADERS
+        }
+      );
+
+      const result = payload.chart?.result?.[0];
+
+      if (!result) {
+        throw new MarketDataError(
+          `Ativo "${fromYahooSymbol(symbol)}" não encontrado na fonte de dados.`,
+          404
+        );
+      }
+
+      return toDividendEvents(result);
+    } catch (error) {
+      const marketError =
+        error instanceof MarketDataError
+          ? error
+          : new MarketDataError('Não foi possível consultar proventos.', 502);
+
+      if (marketError.status === 404) {
+        throw marketError;
+      }
+
+      lastError = marketError;
+    }
+  }
+
+  throw lastError ?? new MarketDataError('Não foi possível consultar proventos.', 502);
 }

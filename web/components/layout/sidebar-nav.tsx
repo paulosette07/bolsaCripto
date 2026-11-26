@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { BellRing, LayoutDashboard, TrendingUp, Wallet } from 'lucide-react';
+import { BellRing, LayoutDashboard, Settings, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -9,7 +9,8 @@ const NAV_ITEMS = [
   { href: '/painel', label: 'Painel', icon: LayoutDashboard },
   { href: '/mercado', label: 'Mercado', icon: TrendingUp },
   { href: '/carteira', label: 'Carteira', icon: Wallet },
-  { href: '/alertas', label: 'Alertas', icon: BellRing }
+  { href: '/alertas', label: 'Alertas', icon: BellRing },
+  { href: '/configuracoes', label: 'Configurações', icon: Settings }
 ] as const;
 
 export function SidebarNav() {

@@ -158,6 +158,19 @@ export function formatPercent(value: number | null | undefined): string {
   return `${sign}${percentFormatter.format(value)}%`;
 }
 
+/**
+ * `12,34%` — percentual sem sinal, para yields e taxas.
+ * `formatPercent` é para variação (sempre com sinal); dividend yield e Selic
+ * não têm direção, então não devem aparecer com "+".
+ */
+export function formatPlainPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '—';
+  }
+
+  return `${percentFormatter.format(value)}%`;
+}
+
 /** Quantidade: sem zeros à direita, até 8 casas (fração de cripto). */
 export function formatQuantity(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {

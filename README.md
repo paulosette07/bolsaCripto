@@ -19,10 +19,52 @@ Next.js 16 com App Router, React Server Components, Tailwind e Supabase (auth + 
 | `/mercado` | Cotação, gráfico histórico e cards de favoritos; B3 (Brapi/Yahoo) e cripto (CoinGecko) |
 | `/carteira` | Posições, preço médio, resultado |
 | `/alertas` | Alertas de preço com disparo por e-mail |
+| `/configuracoes` | Moeda de exibição (real ou dólar) e estado do câmbio/refresh |
 
-No mercado, ativos de criptomoeda podem ser cotados em **real ou dólar**
-(`/mercado?ticker=BTC&type=crypto&cryptoId=bitcoin&currency=USD`). Os preços em dólar vêm
-diretamente da CoinGecko (`vs_currency=usd`), não de conversão local; ativos da B3 são sempre em reais.
+### Moeda de exibição (Configurações)
+
+A tela `/configuracoes` define se criptomoedas e posições aparecem em **real** ou **dólar**.
+A escolha fica no cookie `bm-display-currency` (1 ano, leitura no servidor) e vale para o app
+inteiro — Mercado, Painel e Carteira. O toggle `Real | Dólar` do Mercado grava a mesma
+preferência, então a decisão tomada na cotação vira o padrão do app.
+
+| Situação | Como o valor é obtido |
+| --- | --- |
+| Cripto em dólar | Preço nativo da CoinGecko (`vs_currency=usd`), sem conversão local |
+| Cripto em real | CoinGecko em `vs_currency=brl` |
+| Ação/FII em real | Preço original da B3 (Brapi/Yahoo) |
+| Ação/FII em dólar | Convertido pela PTAX do dia (`web/lib/market/fx.ts`: BCB SGS 10813, Yahoo `BRL=X` como reserva) |
+
+`portfolio.avg_price` continua gravado **em reais**: a conversão acontece na leitura
+(`web/lib/portfolio.ts` → `buildPositions(rows, quotes, money)`), então trocar de moeda nunca
+reescreve o custo cadastrado. Se nenhuma fonte de câmbio responder, a taxa vem `null` e os
+valores seguem na moeda original — nada é inventado. A tela de Configurações mostra a taxa em
+uso, a fonte e a data de referência.
+
+Indicadores de proventos (dividend yield, valores pagos e periodicidade) são sempre em reais,
+porque o provento da B3 é pago em reais independentemente da moeda de exibição.
+
+### Atualização automática (5 minutos)
+
+Painel, Mercado e Carteira chamam `router.refresh()` a cada 5 minutos
+(`web/lib/market/refresh.ts` → `REFRESH_INTERVAL_MINUTES`), revalidando os Server Components
+sem recarregar a página. O intervalo também aparece em Configurações e no botão **Atualizar**
+do topo de cada tela.
+
+### Proventos (dividendos dos ativos da B3)
+
+`web/lib/market/fundamentals.ts` calcula, a partir do histórico de dividendos do Yahoo
+(`chart?events=div`, sem chave):
+
+- **Dividend yield 12m** sobre o preço atual;
+- **Total pago nos últimos 12 meses** por cota e **média por pagamento**;
+- **Periodicidade** inferida do intervalo mediano: mensal (≤45 d), trimestral (≤110 d),
+  semestral (≤200 d), anual (≤400 d) ou irregular;
+- **Últimos proventos** (data e valor) e estimativa do próximo pelo intervalo médio;
+- **Projeção de renda** quando o ativo está na carteira (por ano e por mês).
+
+`computeDividendMetrics` é pura (eventos + preço → métricas), o que permite testar a
+periodicidade sem rede.
 
 ### Favoritos
 

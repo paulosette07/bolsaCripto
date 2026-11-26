@@ -1,3 +1,50 @@
+# Versão 1.2.0 — moeda preferida, atualização a cada 5 min e proventos
+
+## 1. Moeda preferida em Configurações
+
+Nova tela **Configurações** (`/configuracoes`, item no menu lateral) com a escolha
+**Real (R$)** ou **Dólar (US$)** para criptomoedas. A preferência fica em cookie
+(`bm-display-currency`, 1 ano) e vale para o app inteiro:
+
+- **Mercado**: cripto abre na moeda escolhida; o toggle `Real | Dólar` do ativo grava a
+  mesma preferência, então a escolha feita na cotação vira padrão do app.
+- **Painel e Carteira**: patrimônio, custo, resultado, preço e valor de mercado aparecem
+  na moeda escolhida. Em dólar, ações e FIIs são convertidos pela PTAX do dia; em real, a
+  cripto é convertida pelo provedor.
+- **Sem câmbio, sem conversão**: se BCB e Yahoo falharem, o valor continua na moeda
+  original em vez de exibir um número inventado. A taxa usada fica visível em
+  Configurações (valor, fonte e data).
+- **Preço médio** segue gravado em reais; a conversão acontece na leitura, então trocar de
+  moeda nunca altera o que foi cadastrado.
+
+## 2. Atualização automática a cada 5 minutos
+
+Painel, Mercado e Carteira recarregam as cotações sozinhos a cada **5 minutos** via
+`router.refresh()` (revalida os Server Components sem recarregar a página nem perder o
+range do gráfico). Há um botão **Atualizar** manual com o horário da última atualização,
+e o timer reinicia quando a aba volta ao foco.
+
+## 3. Proventos na área de mercado
+
+Ativos da B3 agora têm a ficha **Proventos**, com dados em reais:
+
+- **Dividend yield 12m** sobre o preço atual
+- **Total pago nos últimos 12 meses** por cota
+- **Periodicidade** inferida do histórico: mensal, trimestral, semestral, anual ou irregular
+- **Média por pagamento** e número de pagamentos no ano
+- **Últimos proventos** (data e valor) e estimativa do próximo
+- **Projeção de renda** quando você já tem o ativo na carteira (valor por ano e por mês)
+
+Fonte: histórico de dividendos do Yahoo Finance (`events=div`), sem necessidade de chave.
+
+## 4. API
+
+`POST /api/quotes` aceita `currency: 'BRL' | 'USD'` no corpo; sem ele usa a preferência
+salva. A resposta devolve todas as cotações na mesma moeda, mais o campo `currency`.
+`GET /api/quotes` informa a moeda ativa da sessão (diagnóstico).
+
+---
+
 Aplicativo desktop do Bolsa Monitor para Windows 10/11 de 64 bits.
 
 **Download:** `BolsaMonitor-win-x64-1.1.0.zip` (104 MB) — extraia a pasta e execute `BolsaMonitor.exe`.

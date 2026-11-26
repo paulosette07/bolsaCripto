@@ -1,19 +1,25 @@
 import { NextResponse } from 'next/server';
 
 import { getQuotes } from '@/lib/market';
-import { isAssetType } from '@/lib/market/types';
-import type { AssetRef } from '@/lib/market/types';
+import { isAssetType, isCurrency } from '@/lib/market/types';
+import type { AssetRef, Currency } from '@/lib/market/types';
 import { toMarketErrorMessage } from '@/lib/market/http';
+import { quotesInCurrency } from '@/lib/money';
+import { getDisplayCurrency, getMoneyContext } from '@/lib/preferences/display-currency';
 import { getCurrentUser } from '@/lib/supabase/server';
 
 /**
  * POST /api/quotes
- * Body: { assets: [{ ticker, assetType, cryptoId }] }
- * Resposta: { quotes: Quote[] }
+ * Body: { assets: [{ ticker, assetType, cryptoId }], currency?: 'BRL' | 'USD' }
+ * Resposta: { quotes: Quote[], currency: Currency }
  *
  * POST (e não GET) porque o mesmo ticker existe nos dois mercados: `BTC` como
  * cripto e um eventual `BTC` como código de bolsa. O corpo deixa o tipo
  * explícito sem inventar sintaxe na query string.
+ *
+ * `currency` é opcional: sem ele vale a preferência salva em Configurações, e
+ * todas as cotações voltam na mesma moeda (bolsa convertida pela PTAX quando a
+ * exibição é em dólar).
  */
 
 const MAX_ASSETS_PER_REQUEST = 60;
@@ -60,6 +66,16 @@ function parseAssets(payload: unknown): AssetRef[] | null {
   return parsed;
 }
 
+function parseRequestedCurrency(payload: unknown): Currency | null {
+  if (typeof payload !== 'object' || payload === null) {
+    return null;
+  }
+
+  const { currency } = payload as { currency?: unknown };
+
+  return isCurrency(currency) ? currency : null;
+}
+
 export async function POST(request: Request) {
   const user = await getCurrentUser();
 
@@ -86,11 +102,26 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
-    const quotes = await getQuotes(assets);
+  const requested = parseRequestedCurrency(payload);
 
-    return NextResponse.json({ quotes });
+  try {
+    // A moeda pedida no corpo vence; sem ela, a preferência do usuário manda.
+    const money = requested
+      ? { currency: requested, usdBrl: requested === 'USD' ? (await getMoneyContext()).usdBrl : null }
+      : await getMoneyContext();
+
+    const raw = await getQuotes(assets, { currency: money.currency });
+    const quotes = quotesInCurrency(raw, money.currency, money.usdBrl);
+
+    return NextResponse.json({ quotes, currency: money.currency });
   } catch (error) {
     return NextResponse.json({ error: toMarketErrorMessage(error) }, { status: 502 });
   }
+}
+
+export async function GET() {
+  // Ajuda a depurar: mostra a moeda que o servidor usaria nesta sessão.
+  const currency = await getDisplayCurrency();
+
+  return NextResponse.json({ currency, note: 'Envie POST com { assets } para cotações.' });
 }
