@@ -19,30 +19,44 @@ Next.js 16 com App Router, React Server Components, Tailwind e Supabase (auth + 
 | `/mercado` | Cotação, gráfico histórico e cards de favoritos; B3 (Brapi/Yahoo) e cripto (CoinGecko) |
 | `/carteira` | Posições, preço médio, resultado |
 | `/alertas` | Alertas de preço com disparo por e-mail |
-| `/configuracoes` | Moeda de exibição (real ou dólar) e estado do câmbio/refresh |
+| `/configuracoes` | Moeda das criptomoedas (real ou dólar) e estado do câmbio/refresh |
 
-### Moeda de exibição (Configurações)
+### Moeda das criptomoedas (Configurações)
 
-A tela `/configuracoes` define se criptomoedas e posições aparecem em **real** ou **dólar**.
-A escolha fica no cookie `bm-display-currency` (1 ano, leitura no servidor) e vale para o app
-inteiro — Mercado, Painel e Carteira. O toggle `Real | Dólar` do Mercado grava a mesma
-preferência, então a decisão tomada na cotação vira o padrão do app.
+A tela `/configuracoes` define se as **criptomoedas** aparecem em **real** ou **dólar**.
+A escolha fica no cookie `bm-display-currency` (1 ano, leitura no servidor). O toggle
+`Real | Dólar` do Mercado grava a mesma preferência, então a decisão tomada na cotação vira
+o padrão do app.
+
+**Ações e FIIs ficam sempre em reais.** A B3 negocia em reais, o custo é digitado em reais e
+um preço convertido por câmbio do dia seria um número inventado. A preferência não os afeta
+em nenhum cenário — nem preço, nem valor de mercado, nem resultado.
 
 | Situação | Como o valor é obtido |
 | --- | --- |
 | Cripto em dólar | Preço nativo da CoinGecko (`vs_currency=usd`), sem conversão local |
 | Cripto em real | CoinGecko em `vs_currency=brl` |
-| Ação/FII em real | Preço original da B3 (Brapi/Yahoo) |
-| Ação/FII em dólar | Convertido pela PTAX do dia (`web/lib/market/fx.ts`: BCB SGS 10813, Yahoo `BRL=X` como reserva) |
+| Ação/FII | Sempre o preço original da B3 (Brapi/Yahoo), em reais |
 
-`portfolio.avg_price` continua gravado **em reais**: a conversão acontece na leitura
-(`web/lib/portfolio.ts` → `buildPositions(rows, quotes, money)`), então trocar de moeda nunca
-reescreve o custo cadastrado. Se nenhuma fonte de câmbio responder, a taxa vem `null` e os
-valores seguem na moeda original — nada é inventado. A tela de Configurações mostra a taxa em
-uso, a fonte e a data de referência.
+`web/lib/money.ts` concentra a regra: `displayCurrencyFor(assetType, preference)` devolve a
+preferência **só para `crypto`** e `BRL` para o resto; `quoteMapForDisplay` aplica isso a um
+mapa de cotações. Na carteira e no painel, `summarizePositions` devolve **dois grupos
+independentes** (`stocks` em BRL, `crypto` na moeda escolhida) — somar dólar com real num
+único número enganaria o usuário. A barra de alocação e o ranking de posições comparam os
+dois grupos convertendo para reais (`marketValueBrl`), usando a PTAX do dia
+(`web/lib/market/fx.ts`: BCB SGS 10813, Yahoo `BRL=X` como reserva).
+
+`portfolio.avg_price` é gravado **em reais** para os dois tipos de ativo; na cripto a
+conversão acontece na leitura (`buildPositions`), então trocar de moeda nunca reescreve o
+custo cadastrado. O formulário de edição usa `avgPriceBase` justamente para reenviar o valor
+original. Se nenhuma fonte de câmbio responder, a taxa vem `null` e o valor fica na moeda de
+origem — nada é inventado.
 
 Indicadores de proventos (dividend yield, valores pagos e periodicidade) são sempre em reais,
-porque o provento da B3 é pago em reais independentemente da moeda de exibição.
+porque o provento da B3 é pago em reais independentemente da moeda de exibição das criptos.
+
+`getQuoteMapPartial` (`web/lib/market/index.ts`) busca B3 e cripto em chamadas separadas: um
+429 da CoinGecko não pode zerar os preços da bolsa, e vice-versa.
 
 ### Atualização automática (5 minutos)
 

@@ -3,7 +3,8 @@ import Link from 'next/link';
 import {
   ArrowRight,
   BellRing,
-  CircleDollarSign,
+  Bitcoin,
+  Building2,
   PieChart,
   TrendingUp,
   Wallet
@@ -19,7 +20,7 @@ import { buttonClasses } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { ChangePill } from '@/components/ui/delta';
 import { formatCurrency, formatPercent, formatPrice, toNumber } from '@/lib/format';
-import { getHistory, getQuoteMap } from '@/lib/market';
+import { getHistory, getQuoteMapPartial } from '@/lib/market';
 import { getMacroQuotes } from '@/lib/market/macro';
 import { getMacroRates } from '@/lib/market/rates';
 import type { MacroQuote } from '@/lib/market/macro';
@@ -27,7 +28,7 @@ import type { MacroRate } from '@/lib/market/rates';
 import type { AssetRef } from '@/lib/market/types';
 import { getNewsBoard } from '@/lib/news';
 import type { NewsBoard as NewsBoardData } from '@/lib/news/types';
-import { quoteMapInCurrency } from '@/lib/money';
+import { quoteMapForDisplay } from '@/lib/money';
 import { buildPositions, summarizePositions, withWeights } from '@/lib/portfolio';
 import { getMoneyContext } from '@/lib/preferences/display-currency';
 import { createClient } from '@/lib/supabase/server';
@@ -113,7 +114,8 @@ export default async function DashboardPage() {
   const rows = portfolioRows ?? [];
   const alerts = alertRows ?? [];
 
-  // Moeda escolhida em Configurações: cripto vem nela, bolsa é convertida.
+  // Moeda escolhida em Configurações. Vale para cripto; ações e FIIs ficam
+  // sempre em reais, porque é onde são negociados e onde o custo foi digitado.
   const money = await getMoneyContext();
 
   const assetRefs: AssetRef[] = rows.map((row) => ({
@@ -122,18 +124,13 @@ export default async function DashboardPage() {
     cryptoId: row.crypto_id
   }));
 
-  // Falha de mercado não pode derrubar o painel: mostramos o que dá.
-  let quotes: Awaited<ReturnType<typeof getQuoteMap>> = new Map();
-
-  try {
-    const raw = await getQuoteMap(assetRefs, { currency: money.currency });
-    quotes = quoteMapInCurrency(raw, money.currency, money.usdBrl);
-  } catch {
-    quotes = new Map();
-  }
+  // Falha de mercado não pode derrubar o painel: B3 e cripto são buscados em
+  // separado, então um provedor fora do ar não apaga o outro.
+  const rawQuotes = await getQuoteMapPartial(assetRefs, { currency: money.currency });
+  const quotes = quoteMapForDisplay(rawQuotes, money.currency, money.usdBrl);
 
   const positions = buildPositions(rows, quotes, money);
-  const summary = summarizePositions(positions);
+  const summary = summarizePositions(positions, money);
 
   if (positions.length === 0) {
     return (
@@ -167,9 +164,9 @@ export default async function DashboardPage() {
     );
   }
 
-  const ranked = withWeights(positions, summary.totalValue)
+  const ranked = withWeights(positions)
     .slice()
-    .sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0));
+    .sort((a, b) => (b.marketValueBrl ?? 0) - (a.marketValueBrl ?? 0));
 
   const featured = ranked.find((position) => position.hasQuote) ?? ranked[0];
   const topPositions = ranked.slice(0, MAX_POSITIONS_SHOWN);
@@ -193,8 +190,12 @@ export default async function DashboardPage() {
     }
   }
 
-  const dayTone = summary.dayChangeValue > 0 ? 'up' : summary.dayChangeValue < 0 ? 'down' : 'neutral';
-  const profitTone = summary.totalProfit > 0 ? 'up' : summary.totalProfit < 0 ? 'down' : 'neutral';
+  const stocks = summary.stocks;
+  const crypto = summary.crypto;
+  const stockTone =
+    stocks.totalProfit > 0 ? 'up' : stocks.totalProfit < 0 ? 'down' : 'neutral';
+  const cryptoTone =
+    crypto.totalProfit > 0 ? 'up' : crypto.totalProfit < 0 ? 'down' : 'neutral';
 
   return (
     <div className="space-y-6">
@@ -207,6 +208,9 @@ export default async function DashboardPage() {
             {summary.missingQuotesCount > 0
               ? ` · ${summary.missingQuotesCount} sem cotação`
               : ''}
+            {alerts.length > 0 ? ` · ${alerts.length} alertas ativos` : ''}
+            {' · B3 em reais'}
+            {money.currency === 'USD' ? ', cripto em dólares' : ', cripto em reais'}
           </p>
         </div>
 
@@ -222,53 +226,61 @@ export default async function DashboardPage() {
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Patrimônio"
-          value={formatCurrency(summary.totalValue, summary.currency)}
+          label="Patrimônio B3"
+          value={formatCurrency(stocks.totalValue, stocks.currency)}
           hint={
-            summary.totalCost > 0
-              ? `Custo investido: ${formatCurrency(summary.totalCost, summary.currency)}`
-              : `Valores em ${summary.currency === 'USD' ? 'dólares' : 'reais'}`
+            stocks.positionsCount === 0
+              ? 'Nenhuma ação ou FII na carteira'
+              : stocks.dayChangePercent !== null
+                ? `${formatCurrency(stocks.dayChangeValue, stocks.currency)} hoje (${formatPercent(
+                    stocks.dayChangePercent
+                  )})`
+                : `Custo: ${formatCurrency(stocks.totalCost, stocks.currency)}`
           }
-          icon={<CircleDollarSign className="size-3.5" aria-hidden="true" />}
+          icon={<Building2 className="size-3.5" aria-hidden="true" />}
         />
 
         <StatCard
-          label="Variação do dia"
-          value={formatCurrency(summary.dayChangeValue, summary.currency)}
-          tone={dayTone}
+          label="Cripto"
+          value={formatCurrency(crypto.totalValue, crypto.currency)}
           hint={
-            summary.dayChangePercent !== null
-              ? `${formatPercent(summary.dayChangePercent)} hoje`
-              : undefined
+            crypto.positionsCount === 0
+              ? 'Nenhuma cripto na carteira'
+              : crypto.dayChangePercent !== null
+                ? `${formatCurrency(crypto.dayChangeValue, crypto.currency)} hoje (${formatPercent(
+                    crypto.dayChangePercent
+                  )})`
+                : `Custo: ${formatCurrency(crypto.totalCost, crypto.currency)}`
+          }
+          icon={<Bitcoin className="size-3.5" aria-hidden="true" />}
+        />
+
+        <StatCard
+          label="Resultado B3"
+          value={formatCurrency(stocks.totalProfit, stocks.currency)}
+          tone={stockTone}
+          hint={
+            stocks.totalProfitPercent !== null
+              ? `${formatPercent(stocks.totalProfitPercent)} sobre o custo`
+              : stocks.positionsCount === 0
+                ? 'Sem ativos da B3'
+                : 'Informe o preço médio para calcular'
           }
           icon={<TrendingUp className="size-3.5" aria-hidden="true" />}
         />
 
         <StatCard
-          label="Resultado"
-          value={formatCurrency(summary.totalProfit, summary.currency)}
-          tone={profitTone}
+          label="Resultado cripto"
+          value={formatCurrency(crypto.totalProfit, crypto.currency)}
+          tone={cryptoTone}
           hint={
-            summary.totalProfitPercent !== null
-              ? `${formatPercent(summary.totalProfitPercent)} sobre o custo`
-              : 'Informe o preço médio para calcular'
+            crypto.totalProfitPercent !== null
+              ? `${formatPercent(crypto.totalProfitPercent)} sobre o custo`
+              : crypto.positionsCount === 0
+                ? 'Sem cripto na carteira'
+                : 'Informe o preço médio para calcular'
           }
           icon={<PieChart className="size-3.5" aria-hidden="true" />}
-        />
-
-        <StatCard
-          label="Alertas ativos"
-          value={String(alerts.length)}
-          hint={alerts.length === 0 ? 'Nenhum alerta configurado' : 'Verificados automaticamente'}
-          icon={<BellRing className="size-3.5" aria-hidden="true" />}
-          aside={
-            <Link
-              href="/alertas"
-              className="text-[11px] font-medium text-up underline-offset-4 hover:underline"
-            >
-              {alerts.length === 0 ? 'Criar' : 'Ver'}
-            </Link>
-          }
         />
       </section>
 

@@ -131,6 +131,41 @@ export async function getQuoteMap(
   return map;
 }
 
+/**
+ * Igual a `getQuoteMap`, mas **tolera a falha de um provider**.
+ *
+ * B3 e cripto vêm de fontes diferentes (Brapi/Yahoo e CoinGecko, esta com rate
+ * limit apertado). Com `Promise.all` um 429 da CoinGecko apagava também os
+ * preços da bolsa — a carteira inteira aparecia sem cotação. Aqui cada grupo é
+ * buscado em separado e o que responder entra no mapa.
+ */
+export async function getQuoteMapPartial(
+  assets: readonly AssetRef[],
+  options: QuoteOptions = {}
+): Promise<Map<string, Quote>> {
+  const stockRefs = assets.filter((asset) => asset.assetType === 'stock');
+  const cryptoRefs = assets.filter((asset) => asset.assetType === 'crypto');
+
+  const settled = await Promise.allSettled([
+    stockRefs.length > 0 ? getQuotes(stockRefs, options) : Promise.resolve([] as Quote[]),
+    cryptoRefs.length > 0 ? getQuotes(cryptoRefs, options) : Promise.resolve([] as Quote[])
+  ]);
+
+  const map = new Map<string, Quote>();
+
+  for (const result of settled) {
+    if (result.status !== 'fulfilled') {
+      continue;
+    }
+
+    for (const quote of result.value) {
+      map.set(assetKey(quote.assetType, quote.ticker), quote);
+    }
+  }
+
+  return map;
+}
+
 /** Histórico de um ativo, roteado pelo tipo. */
 export async function getHistory(
   asset: AssetRef,

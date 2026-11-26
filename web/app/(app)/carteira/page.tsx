@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Coins, PieChart, TrendingUp, Wallet } from 'lucide-react';
+import { Bitcoin, Building2, Coins, TrendingUp } from 'lucide-react';
 
 import { AutoRefresh } from '@/components/layout/auto-refresh';
 import { PositionForm } from '@/components/portfolio/position-form';
@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
 import { ChangePill } from '@/components/ui/delta';
 import { formatCurrency, formatPercent, formatPrice, formatQuantity } from '@/lib/format';
-import { getQuoteMap } from '@/lib/market';
+import { getQuoteMapPartial } from '@/lib/market';
 import type { AssetRef } from '@/lib/market/types';
-import { quoteMapInCurrency } from '@/lib/money';
+import { quoteMapForDisplay } from '@/lib/money';
 import { buildPositions, summarizePositions, withWeights } from '@/lib/portfolio';
 import { getMoneyContext } from '@/lib/preferences/display-currency';
 import { createClient } from '@/lib/supabase/server';
@@ -44,29 +44,33 @@ export default async function PortfolioPage() {
     cryptoId: row.crypto_id
   }));
 
-  // Moeda de exibição escolhida em Configurações: cripto vem nela e os ativos
-  // da B3 são convertidos pela PTAX quando a exibição é em dólar.
+  // Moeda escolhida em Configurações: vale para cripto. Ações e FIIs ficam
+  // sempre em reais — é onde são negociados e onde o custo foi digitado.
   const money = await getMoneyContext();
 
-  let quotes: Awaited<ReturnType<typeof getQuoteMap>> = new Map();
-
-  try {
-    const raw = await getQuoteMap(assetRefs, { currency: money.currency });
-    quotes = quoteMapInCurrency(raw, money.currency, money.usdBrl);
-  } catch {
-    quotes = new Map();
-  }
+  // B3 e cripto são buscados em separado: um provedor fora do ar não pode
+  // apagar o preço do outro.
+  const rawQuotes = await getQuoteMapPartial(assetRefs, { currency: money.currency });
+  const quotes = quoteMapForDisplay(rawQuotes, money.currency, money.usdBrl);
 
   const basePositions = buildPositions(portfolioRows, quotes, money);
-  const baseSummary = summarizePositions(basePositions);
-  const positions = withWeights(basePositions, baseSummary.totalValue);
-  const summary = summarizePositions(positions);
+  const positions = withWeights(basePositions);
+  const summary = summarizePositions(positions, money);
 
-  const totalByType = summary.valueByAssetType;
+  const stocks = summary.stocks;
+  const crypto = summary.crypto;
+
+  // A barra de alocação compara os dois grupos em reais.
+  const totalInBrl = summary.totalValueBrl;
   const stockShare =
-    summary.totalValue > 0 ? (totalByType.stock / summary.totalValue) * 100 : 0;
+    totalInBrl > 0 ? (summary.valueByAssetTypeBrl.stock / totalInBrl) * 100 : 0;
   const cryptoShare =
-    summary.totalValue > 0 ? (totalByType.crypto / summary.totalValue) * 100 : 0;
+    totalInBrl > 0 ? (summary.valueByAssetTypeBrl.crypto / totalInBrl) * 100 : 0;
+
+  const stockTone =
+    stocks.totalProfit > 0 ? 'up' : stocks.totalProfit < 0 ? 'down' : 'neutral';
+  const cryptoTone =
+    crypto.totalProfit > 0 ? 'up' : crypto.totalProfit < 0 ? 'down' : 'neutral';
 
   return (
     <div className="space-y-6">
@@ -74,8 +78,7 @@ export default async function PortfolioPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-ink">Carteira</h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Valores em {summary.currency === 'USD' ? 'dólares' : 'reais'}
-            {summary.currency === 'USD' ? ' (bolsa convertida pela PTAX)' : ''}.
+            B3 em reais · cripto em {money.currency === 'USD' ? 'dólares' : 'reais'}.
           </p>
         </div>
 
@@ -84,42 +87,57 @@ export default async function PortfolioPage() {
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Patrimônio"
-          value={formatCurrency(summary.totalValue, summary.currency)}
-          hint={`${summary.positionsCount} ${
-            summary.positionsCount === 1 ? 'ativo' : 'ativos'
-          } · ${summary.missingQuotesCount} sem cotação`}
-          icon={<Wallet className="size-3.5" aria-hidden="true" />}
+          label="Patrimônio B3"
+          value={formatCurrency(stocks.totalValue, stocks.currency)}
+          hint={
+            stocks.positionsCount === 0
+              ? 'Nenhuma ação ou FII na carteira'
+              : `Custo: ${formatCurrency(stocks.totalCost, stocks.currency)}`
+          }
+          icon={<Building2 className="size-3.5" aria-hidden="true" />}
         />
 
         <StatCard
-          label="Custo investido"
-          value={formatCurrency(summary.totalCost, summary.currency)}
-          hint={summary.totalCost > 0 ? 'Soma do preço médio × quantidade' : 'Sem preço médio informado'}
+          label="Cripto"
+          value={formatCurrency(crypto.totalValue, crypto.currency)}
+          hint={
+            crypto.positionsCount === 0
+              ? 'Nenhuma cripto na carteira'
+              : `Custo: ${formatCurrency(crypto.totalCost, crypto.currency)}`
+          }
+          icon={<Bitcoin className="size-3.5" aria-hidden="true" />}
+        />
+
+        <StatCard
+          label="Resultado B3"
+          value={formatCurrency(stocks.totalProfit, stocks.currency)}
+          tone={stockTone}
+          hint={
+            stocks.totalProfitPercent !== null
+              ? `${formatPercent(stocks.totalProfitPercent)} sobre o custo`
+              : stocks.positionsCount === 0
+                ? 'Sem ativos da B3'
+                : 'Informe o preço médio para calcular'
+          }
           icon={<Coins className="size-3.5" aria-hidden="true" />}
         />
 
         <StatCard
-          label="Resultado"
-          value={formatCurrency(summary.totalProfit, summary.currency)}
-          tone={summary.totalProfit > 0 ? 'up' : summary.totalProfit < 0 ? 'down' : 'neutral'}
+          label="Resultado cripto"
+          value={formatCurrency(crypto.totalProfit, crypto.currency)}
+          tone={cryptoTone}
           hint={
-            summary.totalProfitPercent !== null
-              ? `${formatPercent(summary.totalProfitPercent)} sobre o custo`
-              : 'Informe o preço médio para calcular'
+            crypto.totalProfitPercent !== null
+              ? `${formatPercent(crypto.totalProfitPercent)} sobre o custo`
+              : crypto.positionsCount === 0
+                ? 'Sem cripto na carteira'
+                : 'Informe o preço médio para calcular'
           }
           icon={<TrendingUp className="size-3.5" aria-hidden="true" />}
         />
-
-        <StatCard
-          label="Alocação"
-          value={`${formatPercent(stockShare)} / ${formatPercent(cryptoShare)}`}
-          hint="Bolsa / Cripto"
-          icon={<PieChart className="size-3.5" aria-hidden="true" />}
-        />
       </section>
 
-      {summary.totalValue > 0 ? (
+      {totalInBrl > 0 ? (
         <div className="surface-card overflow-hidden p-0">
           <div className="flex h-2 w-full">
             <div

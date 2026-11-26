@@ -4,7 +4,7 @@ import { getQuotes } from '@/lib/market';
 import { isAssetType, isCurrency } from '@/lib/market/types';
 import type { AssetRef, Currency } from '@/lib/market/types';
 import { toMarketErrorMessage } from '@/lib/market/http';
-import { quotesInCurrency } from '@/lib/money';
+import { quotesForDisplay } from '@/lib/money';
 import { getDisplayCurrency, getMoneyContext } from '@/lib/preferences/display-currency';
 import { getCurrentUser } from '@/lib/supabase/server';
 
@@ -17,9 +17,10 @@ import { getCurrentUser } from '@/lib/supabase/server';
  * cripto e um eventual `BTC` como código de bolsa. O corpo deixa o tipo
  * explícito sem inventar sintaxe na query string.
  *
- * `currency` é opcional: sem ele vale a preferência salva em Configurações, e
- * todas as cotações voltam na mesma moeda (bolsa convertida pela PTAX quando a
- * exibição é em dólar).
+ * `currency` é opcional: sem ele vale a preferência salva em Configurações.
+ * A moeda se aplica **só a cripto** — ações e FIIs voltam sempre em reais, que
+ * é onde são negociados. O campo `currency` da resposta repete a preferência
+ * usada para cripto.
  */
 
 const MAX_ASSETS_PER_REQUEST = 60;
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
       : await getMoneyContext();
 
     const raw = await getQuotes(assets, { currency: money.currency });
-    const quotes = quotesInCurrency(raw, money.currency, money.usdBrl);
+    const quotes = quotesForDisplay(raw, money.currency, money.usdBrl);
 
     return NextResponse.json({ quotes, currency: money.currency });
   } catch (error) {

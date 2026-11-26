@@ -25,14 +25,14 @@ const OPTIONS: readonly OptionDescriptor[] = [
     title: 'Real',
     symbol: 'R$',
     description:
-      'Cripto e posições em reais. Os ativos da B3 aparecem no preço original e as criptos são convertidas pelo dólar do dia.'
+      'Cripto em reais, como no mercado brasileiro. Preço, posição e patrimônio de cripto aparecem em R$.'
   },
   {
     value: 'USD',
     title: 'Dólar',
     symbol: 'US$',
     description:
-      'Cripto e posições em dólares, inclusive o patrimônio da carteira. Ações e FIIs são convertidos pela PTAX.'
+      'Cripto em dólares, a moeda nativa das exchanges. O custo em reais é convertido pela PTAX na leitura.'
   }
 ];
 
@@ -109,8 +109,8 @@ export function CurrencyPreference({ current }: CurrencyPreferenceProps) {
       ))}
 
       <p className="px-1 text-[11px] leading-relaxed text-ink-faint">
-        A escolha vale para todo o app — Mercado, Painel e Carteira — e também define a moeda do
-        toggle de cripto. Você pode trocar a qualquer momento.
+        Vale para cripto no Mercado, no Painel e na Carteira, e define a moeda do toggle de cripto.
+        Ações e FIIs continuam sempre em reais — a escolha não afeta a bolsa.
       </p>
     </form>
   );

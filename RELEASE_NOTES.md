@@ -1,3 +1,44 @@
+# Versão 1.2.1 — a moeda vale só para cripto; B3 fica em reais
+
+## 1. Real ou dólar agora é uma escolha **das criptomoedas**
+
+A preferência de moeda deixou de ser global. **Ações e FIIs aparecem sempre em reais**, em
+qualquer configuração: preço, valor de mercado, resultado e patrimônio. A B3 negocia em
+reais, o custo é digitado em reais e converter por cima seria exibir um número que não
+existe. A escolha em **Configurações** afeta apenas as criptomoedas.
+
+| Onde | Comportamento |
+| --- | --- |
+| Mercado | Cripto alterna Real/Dólar; ação e FII mostram `real (BRL)` e o toggle não aparece |
+| Favoritos | Cada card na moeda do próprio ativo: ação em `R$`, cripto na moeda escolhida |
+| Carteira e Painel | Dois cards independentes — **Patrimônio B3** (R$) e **Cripto** (US$/R$) |
+
+## 2. Carteira e painel: dois patrimônios, sem soma enganosa
+
+`summarizePositions` devolve grupos separados (`stocks` em BRL, `crypto` na moeda escolhida)
+em vez de um total único. Somar dólar com real num só número daria um valor sem significado.
+Quando a comparação faz sentido — barra de alocação e ranking de posições — os dois grupos
+são convertidos para reais (`marketValueBrl`) pela PTAX do dia.
+
+## 3. Uma fonte fora do ar não apaga a outra
+
+`getQuoteMapPartial` (`web/lib/market/index.ts`) busca B3 e cripto em chamadas separadas.
+Antes, um erro da CoinGecko (rate limit) derrubava junto os preços da bolsa e a carteira
+inteira aparecia sem cotação. Agora cada grupo entra no mapa com o que respondeu.
+
+## 4. Textos de Configurações refeitos
+
+A tela explica o que muda e o que nunca muda: cripto seguindo a preferência, B3 sempre em
+reais, preço médio gravado em reais, proventos em reais e a barra de alocação como única
+comparação entre os dois grupos. A taxa USD/BRL aparece com fonte e data de referência.
+
+## 5. API
+
+`POST /api/quotes` mantém `currency` no corpo, mas ele vale **só para cripto**: ações e FIIs
+voltam sempre em reais, e o campo `currency` da resposta repete a preferência usada.
+
+---
+
 # Versão 1.2.0 — moeda preferida, atualização a cada 5 min e proventos
 
 ## 1. Moeda preferida em Configurações
@@ -8,9 +49,9 @@ Nova tela **Configurações** (`/configuracoes`, item no menu lateral) com a esc
 
 - **Mercado**: cripto abre na moeda escolhida; o toggle `Real | Dólar` do ativo grava a
   mesma preferência, então a escolha feita na cotação vira padrão do app.
-- **Painel e Carteira**: patrimônio, custo, resultado, preço e valor de mercado aparecem
-  na moeda escolhida. Em dólar, ações e FIIs são convertidos pela PTAX do dia; em real, a
-  cripto é convertida pelo provedor.
+- **Painel e Carteira**: patrimônio, custo e resultado da cripto aparecem na moeda
+  escolhida. *(Na 1.2.1 a regra mudou: a preferência passou a valer só para cripto e a B3
+  ficou definitivamente em reais.)*
 - **Sem câmbio, sem conversão**: se BCB e Yahoo falharem, o valor continua na moeda
   original em vez de exibir um número inventado. A taxa usada fica visível em
   Configurações (valor, fonte e data).

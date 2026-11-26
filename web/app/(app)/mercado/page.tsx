@@ -17,10 +17,10 @@ import { isFavorited, MAX_FAVORITES, toAssetRef } from '@/lib/favorites';
 import { formatCurrency, formatDateTime, formatPrice, formatRelativeTime, toNumber } from '@/lib/format';
 import { getDividendMetrics } from '@/lib/market/fundamentals';
 import { toMarketErrorMessage } from '@/lib/market/http';
-import { getHistory, getQuoteMap, getSingleQuote } from '@/lib/market';
+import { getHistory, getQuoteMapPartial, getSingleQuote } from '@/lib/market';
 import { assetHref, currencyForAsset, isAssetType, parseCurrency } from '@/lib/market/types';
 import type { AssetRef, Quote } from '@/lib/market/types';
-import { convertAmount, quoteInCurrency, quoteMapInCurrency } from '@/lib/money';
+import { convertAmount, quoteForDisplay, quoteMapForDisplay } from '@/lib/money';
 import { getMoneyContext } from '@/lib/preferences/display-currency';
 import { createClient } from '@/lib/supabase/server';
 import type { FavoriteRow } from '@/lib/types/database';
@@ -113,13 +113,14 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
 
   if (favorites.length > 0) {
     try {
-      // Cripto já vem na moeda pedida; bolsa vem em reais e é convertida quando
-      // a exibição é em dólar — assim o card não mistura duas moedas.
-      const raw = await getQuoteMap(favorites.map(toAssetRef), {
+      // Cripto segue a moeda escolhida; bolsa permanece em reais em qualquer
+      // configuração — cada card mostra a moeda do próprio ativo. A busca é
+      // tolerante: se a CoinGecko falhar, os cards da B3 continuam com preço.
+      const raw = await getQuoteMapPartial(favorites.map(toAssetRef), {
         currency: requestedCurrency
       });
 
-      favoriteQuotes = quoteMapInCurrency(raw, requestedCurrency, money.usdBrl);
+      favoriteQuotes = quoteMapForDisplay(raw, requestedCurrency, money.usdBrl);
     } catch {
       favoriteQuotes = new Map();
     }
@@ -140,8 +141,8 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
         getHistory(asset, '1mo', { currency })
       ]);
 
-      // A cotação de bolsa chega em BRL mesmo quando a exibição é dólar.
-      quote = quoteResult ? quoteInCurrency(quoteResult, requestedCurrency, money.usdBrl) : null;
+      // Cripto na moeda escolhida; ação/FII sempre em reais.
+      quote = quoteResult ? quoteForDisplay(quoteResult, requestedCurrency, money.usdBrl) : null;
       points = history.points;
 
       if (!quote) {
@@ -183,7 +184,8 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-ink">Mercado</h1>
             <p className="mt-1 text-sm text-ink-muted">
-              Cotações da B3 com proventos e criptomoedas em {requestedCurrency === 'USD' ? 'dólar' : 'real'}.
+              B3 em reais, com proventos · cripto em{' '}
+              {requestedCurrency === 'USD' ? 'dólar' : 'real'}.
             </p>
           </div>
 
@@ -241,8 +243,8 @@ export default async function MarketPage({ searchParams }: MarketPageProps) {
           </div>
 
           <p className="border-t border-line px-4 py-3 text-[11px] text-ink-faint sm:px-5">
-            Criptomoedas alternam entre real e dólar no topo da cotação — e a escolha vira o padrão do
-            app, ajustável em Configurações.
+            Criptomoedas alternam entre real e dólar no topo da cotação — e a escolha vira o padrão
+            do app, ajustável em Configurações. Ações e FIIs ficam sempre em reais.
           </p>
         </Card>
       ) : null}
