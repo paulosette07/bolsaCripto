@@ -45,7 +45,18 @@ corpo do `POST /api/app/quotes`.
 Também cobre as regras de descarte que já valiam no resto do app — entrada sem preço ou sem
 ticker é ignorada, número em string é aceito, ponto de histórico sem preço não vira zero.
 
-## 4. Como verificar
+## 4. Ordem de publicação (importante)
+
+O desktop hospedado depende do servidor, então **a web sobe primeiro**:
+
+1. deploy da web (`/api/app/*` e `/api/fx`);
+2. só então distribuir o executável.
+
+Publicar o app antes das rotas deixaria a faixa em "aguardando cotação" e as telas sem
+dados — o app não quebra, mas não serve para nada. Já está no ar: verificado com um usuário
+real em `/api/app/quotes`, `history`, `search`, `macro`, `news` e `alerts/check`.
+
+## 5. Como verificar
 
 ```powershell
 dotnet build desktop/BolsaMonitor.slnx
@@ -53,10 +64,11 @@ dotnet test  desktop/src/BolsaMonitor.Core.Tests   # 88/88
 dotnet run --project desktop/src/BolsaMonitor.Desktop -- --demo
 ```
 
-Abrir o app sem `appsettings.json` deve mostrar o login com a faixa do dólar no rodapé e,
-depois de entrar, dados reais vindos de `bolsa-monitor.vercel.app`.
+Abrir o app sem `appsettings.json` mostra o login com a faixa do dólar no rodapé
+(`US$ 1 = R$ 5,54 · -3,51% · Banco Central`) e, depois de entrar, dados reais vindos de
+`bolsa-monitor.vercel.app`.
 
-## 5. Banco de dados
+## 6. Banco de dados
 
 Nenhuma migração nesta versão. O Supabase segue com `0001_init.sql` e `0002_favorites.sql`.
 
