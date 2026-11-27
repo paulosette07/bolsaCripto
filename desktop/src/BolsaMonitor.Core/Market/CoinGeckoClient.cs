@@ -84,13 +84,45 @@ public sealed class CoinGeckoClient
             [MarketRange.Max] = "max"
         };
 
+    /// <summary>
+    /// Moeda em que a fonte é consultada. Pedir dólar criaria uma segunda URL
+    /// por moeda — alternar real/dólar dobrava o consumo da API pública e
+    /// terminava em HTTP 429. O dólar é derivado do câmbio do dia.
+    /// </summary>
+    private const string UpstreamCurrency = "brl";
+
     private readonly JsonHttpClient _httpClient;
     private readonly AppOptions _options;
+    private readonly UsdBrlRateProvider _rates;
 
-    public CoinGeckoClient(JsonHttpClient httpClient, AppOptions options)
+    public CoinGeckoClient(JsonHttpClient httpClient, AppOptions options, UsdBrlRateProvider rates)
     {
         _httpClient = httpClient;
         _options = options;
+        _rates = rates;
+    }
+
+    /// <summary>Moeda consultada na fonte e fator aplicado aos números devolvidos.</summary>
+    private sealed record CurrencyPlan(string VsCurrency, decimal Factor);
+
+    /// <summary>
+    /// Sem câmbio disponível a conversão é impossível: nesse caso — e só nele —
+    /// consultamos a moeda final direto na fonte, em vez de inventar uma taxa.
+    /// </summary>
+    private async Task<CurrencyPlan> PlanCurrencyAsync(
+        DisplayCurrency currency,
+        CancellationToken cancellationToken)
+    {
+        if (currency == DisplayCurrency.Brl)
+        {
+            return new CurrencyPlan(UpstreamCurrency, 1m);
+        }
+
+        var rate = await _rates.GetRateAsync(cancellationToken).ConfigureAwait(false);
+
+        return rate is > 0m
+            ? new CurrencyPlan(UpstreamCurrency, 1m / rate.Value)
+            : new CurrencyPlan(currency.ToApiValue(), 1m);
     }
 
     /// <summary>Resolve o id canônico (bitcoin) a partir do ticker (BTC).</summary>
@@ -131,7 +163,9 @@ public sealed class CoinGeckoClient
             return Array.Empty<Quote>();
         }
 
-        var url = $"{BaseUrl}/coins/markets?vs_currency={currency.ToApiValue()}&ids={Uri.EscapeDataString(string.Join(',', ids))}&price_change_percentage=24h&sparkline=false";
+        var plan = await PlanCurrencyAsync(currency, cancellationToken).ConfigureAwait(false);
+
+        var url = $"{BaseUrl}/coins/markets?vs_currency={plan.VsCurrency}&ids={Uri.EscapeDataString(string.Join(',', ids))}&price_change_percentage=24h&sparkline=false";
         var payload = await _httpClient.GetAsync<List<CoinMarket>>(url, Headers(), cancellationToken).ConfigureAwait(false);
 
         var quotes = new List<Quote>();
@@ -150,9 +184,10 @@ public sealed class CoinGeckoClient
                 AssetType.Crypto,
                 item.Id,
                 string.IsNullOrWhiteSpace(item.Name) ? item.Id : item.Name!,
-                item.CurrentPrice.Value,
+                // Percentual é adimensional: preço e variação absoluta bastam.
+                item.CurrentPrice.Value * plan.Factor,
                 item.PriceChangePercentage24h ?? 0m,
-                item.PriceChange24h ?? 0m,
+                (item.PriceChange24h ?? 0m) * plan.Factor,
                 null,
                 currency.ToCode(),
                 item.Image,
@@ -182,16 +217,24 @@ public sealed class CoinGeckoClient
         }
 
         var days = RangeDays[range];
+        var plan = await PlanCurrencyAsync(currency, cancellationToken).ConfigureAwait(false);
         List<HistoryPoint> points;
 
         try
         {
-            points = await FetchChartAsync(coinId, days, currency, cancellationToken).ConfigureAwait(false);
+            points = await FetchChartAsync(coinId, days, plan.VsCurrency, cancellationToken).ConfigureAwait(false);
         }
         catch (MarketDataException) when (days == "max")
         {
             // Plano público limita a janela histórica.
-            points = await FetchChartAsync(coinId, "365", currency, cancellationToken).ConfigureAwait(false);
+            points = await FetchChartAsync(coinId, "365", plan.VsCurrency, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (plan.Factor != 1m)
+        {
+            points = points
+                .Select(point => point with { Price = point.Price * plan.Factor })
+                .ToList();
         }
 
         return new PriceHistory(
@@ -242,10 +285,10 @@ public sealed class CoinGeckoClient
     private async Task<List<HistoryPoint>> FetchChartAsync(
         string coinId,
         string days,
-        DisplayCurrency currency,
+        string vsCurrency,
         CancellationToken cancellationToken)
     {
-        var url = $"{BaseUrl}/coins/{Uri.EscapeDataString(coinId)}/market_chart?vs_currency={currency.ToApiValue()}&days={days}";
+        var url = $"{BaseUrl}/coins/{Uri.EscapeDataString(coinId)}/market_chart?vs_currency={vsCurrency}&days={days}";
         var payload = await _httpClient.GetAsync<MarketChartResponse>(url, Headers(), cancellationToken).ConfigureAwait(false);
 
         var points = new List<HistoryPoint>();

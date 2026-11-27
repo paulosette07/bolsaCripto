@@ -1,3 +1,4 @@
+import { planCryptoCurrency, scaleCryptoAmount } from './crypto-currency';
 import { fetchJson, MarketDataError } from './http';
 import type {
   AssetSearchResult,
@@ -92,6 +93,25 @@ const MAX_HISTORY_POINTS = 400;
 /** Reais são a moeda padrão do app; dólar é opt-in na área de cripto. */
 const DEFAULT_CURRENCY: Currency = 'BRL';
 
+/**
+ * Quanto tempo uma resposta antiga ainda pode ser servida quando a fonte
+ * responde 429/5xx. A API pública da CoinGecko limita por IP e,
+ * no servidor, todos os usuários saem pelo mesmo IP — servir o último preço
+ * bom (com o horário real de atualização no rodapé) é melhor do que trocar a
+ * cotação por uma caixa de erro.
+ */
+const STALE_FALLBACK_MS = 15 * 60 * 1000;
+
+/** Teto do cache em memória, para não crescer sem limite numa instância viva. */
+const MAX_STALE_ENTRIES = 200;
+
+interface StaleEntry {
+  storedAt: number;
+  payload: unknown;
+}
+
+const staleByUrl = new Map<string, StaleEntry>();
+
 export interface CryptoQuoteOptions {
   noStore?: boolean;
   /** Moeda de exibição do preço. Padrão: BRL. */
@@ -124,40 +144,73 @@ interface SearchResponse {
   }[];
 }
 
-function withApiKey(url: string): string {
-  return url;
-}
-
 function requestHeaders(): Record<string, string> {
   return coingeckoApiKey ? { 'x-cg-demo-api-key': coingeckoApiKey } : {};
 }
 
+/** Falha que vale a pena cobrir com a última resposta boa (rate limit / queda). */
+function isRecoverableFailure(error: unknown): boolean {
+  if (error instanceof MarketDataError) {
+    // 404 é dado ausente de verdade: servir cache antigo esconderia o problema.
+    return error.status === 429 || error.status >= 500;
+  }
+
+  return true;
+}
+
+function rememberResponse(url: string, payload: unknown): void {
+  if (staleByUrl.size >= MAX_STALE_ENTRIES) {
+    const oldestKey = staleByUrl.keys().next().value;
+
+    if (oldestKey !== undefined) {
+      staleByUrl.delete(oldestKey);
+    }
+  }
+
+  staleByUrl.set(url, { storedAt: Date.now(), payload });
+}
+
+function recallResponse<T>(url: string): T | null {
+  const entry = staleByUrl.get(url);
+
+  if (!entry || Date.now() - entry.storedAt > STALE_FALLBACK_MS) {
+    return null;
+  }
+
+  return entry.payload as T;
+}
+
 /**
- * `fetchJson` já monta os headers padrão; para o header da CoinGecko usamos
- * uma URL com chave apenas quando necessário. Mantido separado para deixar
- * explícito que o provider funciona sem credencial.
+ * Chamada à CoinGecko com dois níveis de proteção.
+ *
+ * 1. `fetchJson` repete uma vez quando a fonte responde 429/503 — rajadas
+ *    curtas são o modo normal de falha da API pública.
+ * 2. Se ainda assim falhar, servimos a última resposta boa da mesma URL (até
+ *    15 min). Cripto não pode sumir da carteira porque o provedor limitou a
+ *    consulta; o horário real da cotação continua visível no rodapé.
  */
 async function fetchCoinGecko<T>(url: string, revalidateSeconds: number, noStore: boolean): Promise<T> {
   const headers = requestHeaders();
 
-  if (Object.keys(headers).length === 0) {
-    return fetchJson<T>(withApiKey(url), { revalidateSeconds, noStore });
+  try {
+    const payload = await fetchJson<T>(url, {
+      revalidateSeconds,
+      noStore,
+      ...(Object.keys(headers).length > 0 ? { headers } : {})
+    });
+
+    rememberResponse(url, payload);
+
+    return payload;
+  } catch (error) {
+    const stale = recallResponse<T>(url);
+
+    if (stale !== null && isRecoverableFailure(error)) {
+      return stale;
+    }
+
+    throw error;
   }
-
-  // Caminho com API key: fetch direto com o header extra.
-  const response = await fetch(url, {
-    headers: { accept: 'application/json', ...headers },
-    ...(noStore ? { cache: 'no-store' as const } : { next: { revalidate: revalidateSeconds } })
-  });
-
-  if (!response.ok) {
-    throw new MarketDataError(
-      `CoinGecko respondeu HTTP ${response.status}. Tente novamente em instantes.`,
-      response.status
-    );
-  }
-
-  return (await response.json()) as T;
 }
 
 /** Resolve o id canônico a partir do ticker, usando o mapa e depois a busca. */
@@ -180,7 +233,7 @@ export async function resolveCryptoId(ticker: string): Promise<string | null> {
   return exact?.cryptoId ?? results[0]?.cryptoId ?? null;
 }
 
-function toQuote(item: CoinMarketItem, currency: Currency): Quote | null {
+function toQuote(item: CoinMarketItem, currency: Currency, factor: number): Quote | null {
   const cryptoId = item.id;
   const price = item.current_price;
 
@@ -193,9 +246,10 @@ function toQuote(item: CoinMarketItem, currency: Currency): Quote | null {
     assetType: 'crypto',
     cryptoId,
     name: item.name?.trim() || cryptoId,
-    price,
+    price: scaleCryptoAmount(price, factor),
+    // Percentual é adimensional: converter preço e variação absoluta já basta.
     changePercent: item.price_change_percentage_24h ?? 0,
-    changeValue: item.price_change_24h ?? 0,
+    changeValue: scaleCryptoAmount(item.price_change_24h ?? 0, factor),
     previousClose: null,
     currency,
     logoUrl: item.image ?? null,
@@ -215,15 +269,16 @@ export async function getCryptoQuotes(
   }
 
   const currency = options.currency ?? DEFAULT_CURRENCY;
+  const plan = await planCryptoCurrency(currency);
 
-  const url = `${COINGECKO_BASE_URL}/coins/markets?vs_currency=${currency.toLowerCase()}&ids=${encodeURIComponent(
+  const url = `${COINGECKO_BASE_URL}/coins/markets?vs_currency=${plan.vsCurrency.toLowerCase()}&ids=${encodeURIComponent(
     ids.join(',')
   )}&price_change_percentage=24h&sparkline=false`;
 
   const items = await fetchCoinGecko<CoinMarketItem[]>(url, 60, options.noStore ?? false);
 
   return items
-    .map((item) => toQuote(item, currency))
+    .map((item) => toQuote(item, currency, plan.factor))
     .filter((quote): quote is Quote => quote !== null);
 }
 
@@ -255,12 +310,13 @@ function downsample(points: HistoryPoint[], limit: number): HistoryPoint[] {
 async function fetchMarketChart(
   cryptoId: string,
   days: string,
-  noStore: boolean,
-  currency: Currency
+  vsCurrency: Currency,
+  factor: number,
+  noStore: boolean
 ): Promise<HistoryPoint[]> {
   const url = `${COINGECKO_BASE_URL}/coins/${encodeURIComponent(
     cryptoId
-  )}/market_chart?vs_currency=${currency.toLowerCase()}&days=${days}`;
+  )}/market_chart?vs_currency=${vsCurrency.toLowerCase()}&days=${days}`;
 
   const payload = await fetchCoinGecko<MarketChartResponse>(url, 300, noStore);
 
@@ -271,7 +327,7 @@ async function fetchMarketChart(
     const price = entry[1];
 
     if (Number.isFinite(timestamp) && Number.isFinite(price)) {
-      points.push({ timestamp, price });
+      points.push({ timestamp, price: scaleCryptoAmount(price, factor) });
     }
   }
 
@@ -288,15 +344,16 @@ export async function getCryptoHistory(
   const noStore = options.noStore ?? false;
   const currency = options.currency ?? DEFAULT_CURRENCY;
   const days = RANGE_TO_DAYS[range];
+  const plan = await planCryptoCurrency(currency);
 
   let points: HistoryPoint[];
 
   try {
-    points = await fetchMarketChart(id, days, noStore, currency);
+    points = await fetchMarketChart(id, days, plan.vsCurrency, plan.factor, noStore);
   } catch (error) {
     if (days === 'max') {
       // Plano público limita a janela histórica; cai para 1 ano.
-      points = await fetchMarketChart(id, '365', noStore, currency);
+      points = await fetchMarketChart(id, '365', plan.vsCurrency, plan.factor, noStore);
     } else {
       throw error;
     }

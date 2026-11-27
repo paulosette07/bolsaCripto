@@ -164,6 +164,10 @@ public partial class App : Application
         else
         {
             services.AddSingleton(new JsonHttpClient(new HttpClient()));
+
+            // Câmbio USD/BRL: a cripto é consultada sempre em reais e o dólar é
+            // derivado desta taxa (uma URL por moeda só, sem 429 ao alternar).
+            services.AddSingleton(_ => new UsdBrlRateProvider(new HttpClient()));
             services.AddSingleton<BrapiClient>();
             services.AddSingleton<CoinGeckoClient>();
             services.AddSingleton<IMarketService, MarketService>();

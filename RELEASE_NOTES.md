@@ -1,3 +1,58 @@
+# Versão 1.2.2 — trocar Real/Dólar em cripto não estoura mais a fonte
+
+## 1. O erro HTTP 429 ao alternar a moeda
+
+A moeda escolhida viajava dentro da URL da CoinGecko (`vs_currency=brl` / `vs_currency=usd`).
+Cada clique em **R$ ↔ US$** criava uma chave de cache nova e disparava cotação **e** histórico
+na API pública, que limita por IP — resultado: `Falha ao consultar a fonte de dados (HTTP 429)`
+justamente na troca de moeda.
+
+Agora a fonte é consultada **sempre na mesma moeda (BRL)** e o dólar é derivado do câmbio do
+dia (BCB, com Yahoo como reserva). Alternar a moeda deixa de gerar requisição nova: acerta o
+cache do servidor.
+
+- Preço, variação e histórico passam pelo **mesmo fator de conversão** — antes eram duas
+  conversões independentes da fonte, que podiam divergir.
+- Se o câmbio não estiver disponível, a fonte é consultada direto na moeda final. Nunca se
+  inventa uma taxa.
+- Bônus: `POST /api/quotes` com `currency: 'USD'` e preferência em real deixava de converter
+  (câmbio nulo); agora o valor já vem correto do provider.
+
+## 2. Resiliência quando a fonte limita
+
+- Falhas **429/503** são repetidas uma vez, respeitando `Retry-After` (com teto para não
+  travar a tela).
+- Se o limite persistir, a CoinGecko serve a **última resposta boa** (até 15 min) em vez de
+  trocar a cotação por uma caixa de erro. O horário real de atualização continua no rodapé
+  do ativo, então o dado não se disfarça de novo.
+- A mensagem de 429 agora diz o que fazer: "A fonte de dados limitou as consultas agora
+  (HTTP 429). Aguarde alguns segundos e tente novamente."
+
+## 3. Desktop com o mesmo tratamento
+
+O app Windows tinha o mesmo defeito e recebeu a mesma correção:
+
+- `UsdBrlRateProvider` (novo): dólar comercial do **BCB (SGS 10813)**, com fallback na
+  AwesomeAPI e cache de 30 min.
+- `CoinGeckoClient`: consulta sempre em BRL e converte preço, variação e todos os pontos do
+  histórico pelo câmbio; só cai para `vs_currency=usd` quando não há câmbio.
+- `JsonHttpClient`: repetição em 429/503 e mensagens específicas.
+
+## 4. Banco de dados
+
+Nenhuma migração nesta versão — só código. O Supabase continua com `0001_init.sql` e
+`0002_favorites.sql` já aplicados.
+
+## 5. Verificação
+
+- API real: BRL 343.368 → exibido 343.368 em reais; USD 59.778,55 → exibido igual em dólar
+  (rácio 5,745 = câmbio), sem conversão dupla, gráfico na mesma moeda.
+- Rajada de 6 criptos em dólar sem cache: nenhuma falha.
+- Web: `tsc --noEmit`, `eslint .` e `next build` limpos.
+- Desktop: build ok e **70/70 testes** passando.
+
+---
+
 # Versão 1.2.1 — a moeda vale só para cripto; B3 fica em reais
 
 ## 1. Real ou dólar agora é uma escolha **das criptomoedas**
