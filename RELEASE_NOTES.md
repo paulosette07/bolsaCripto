@@ -1,3 +1,67 @@
+# Versão 1.3.0 — o app desktop roda sem nenhum segredo embutido
+
+## 1. Release do desktop em **modo hospedado**
+
+Até aqui o executável precisava das chaves de quem o rodava: Brapi, CoinGecko e — o pior —
+credencial de e-mail (Resend ou SMTP) para os alertas funcionarem. Isso impedia distribuir o
+app sem entregar segredo junto.
+
+Agora o padrão da release é o **modo hospedado**: o desktop consome `/api/app/*` do servidor
+do Bolsa Monitor, autenticado com o **token do próprio usuário**. As credenciais continuam
+só no servidor.
+
+| O que | Antes | Agora |
+| --- | --- | --- |
+| Cotações, histórico, busca | app consultava Brapi/CoinGecko | servidor consulta e devolve JSON |
+| Indicadores, juros e notícias | app consultava Yahoo/BCB/RSS | servidor consulta e devolve JSON |
+| Envio de e-mail dos alertas | app precisava de chave Resend/SMTP | app pede ao servidor (`POST /api/app/alerts/check`) |
+| Configuração necessária | `appsettings.json` preenchido | **nenhuma** — `appsettings.defaults.json` já vem no pacote |
+
+O que o app ainda guarda é só `SupabaseUrl` + a chave **anon**, que é pública por design: é a
+mesma que vai no navegador e o acesso real é limitado por RLS. Carteira, favoritos e alertas
+continuam indo direto ao Supabase com o token do usuário — são dados dele.
+
+Quem quiser apontar para outro servidor (ou voltar a consultar os provedores com chaves
+próprias) só precisa de um `appsettings.json` ao lado do executável: ele sobrepõe os
+defaults chave por chave. `ApiBaseUrl` vazio desliga o modo hospedado.
+
+## 2. Dólar visível em todas as telas
+
+Uma faixa com o **dólar comercial** aparece no rodapé de todas as telas do desktop —
+inclusive no **login**, antes de existir sessão. Mostra a taxa, a variação do dia, a fonte
+(BCB, AwesomeAPI, Yahoo) e a hora da leitura.
+
+- Alimentada por `GET /api/fx`, que é público justamente por isso;
+- atualiza junto com a verificação de alertas, a cada 5 minutos;
+- se a fonte cair, mantém o último número em vez de sumir — o rodapé não é lugar de erro.
+
+## 3. Testes de contrato com o servidor
+
+O desktop hospedado não vê o código da web: se um campo do JSON mudar de nome, o app
+quebraria em produção **sem build vermelho**. `ApiJsonTests` (18 casos) fixa o payload de
+`/api/app/*`: cotações, histórico, busca, macro, notícias, câmbio, resumo de alertas e o
+corpo do `POST /api/app/quotes`.
+
+Também cobre as regras de descarte que já valiam no resto do app — entrada sem preço ou sem
+ticker é ignorada, número em string é aceito, ponto de histórico sem preço não vira zero.
+
+## 4. Como verificar
+
+```powershell
+dotnet build desktop/BolsaMonitor.slnx
+dotnet test  desktop/src/BolsaMonitor.Core.Tests   # 88/88
+dotnet run --project desktop/src/BolsaMonitor.Desktop -- --demo
+```
+
+Abrir o app sem `appsettings.json` deve mostrar o login com a faixa do dólar no rodapé e,
+depois de entrar, dados reais vindos de `bolsa-monitor.vercel.app`.
+
+## 5. Banco de dados
+
+Nenhuma migração nesta versão. O Supabase segue com `0001_init.sql` e `0002_favorites.sql`.
+
+---
+
 # Versão 1.2.2 — trocar Real/Dólar em cripto não estoura mais a fonte
 
 ## 1. O erro HTTP 429 ao alternar a moeda

@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:BolsaMonitor.Desktop.ViewModels"
+        xmlns:views="clr-namespace:BolsaMonitor.Desktop.Views"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=vm:ShellViewModel}"
         Title="Bolsa Monitor"
@@ -20,6 +21,10 @@
             <ColumnDefinition Width="236" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
         <!-- Barra lateral -->
         <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
@@ -106,7 +111,7 @@
         </Border>
 
         <!-- Conteúdo -->
-        <Grid Grid.Column="1" Margin="26,20,26,20">
+        <Grid Grid.Column="1" Grid.Row="0" Margin="26,20,26,20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
@@ -146,5 +151,13 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <!--
+            Faixa do dólar: fica no rodapé, fora da área de conteúdo, para não
+            competir com os indicadores do painel. É a mesma faixa da web.
+        -->
+        <views:RateTickerBar Grid.Row="1"
+                             Grid.ColumnSpan="2"
+                             DataContext="{Binding RateTicker}" />
     </Grid>
 </Window>

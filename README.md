@@ -219,6 +219,31 @@ correta — o usuário não fica preso com a sessão pendente.
 O cron de alertas roda em `/api/alerts/check` (protegido por `Authorization: Bearer $CRON_SECRET`),
 agendado em `web/vercel.json` e também por GitHub Actions.
 
+### API para o app desktop (`/api/app/*`)
+
+O desktop **hospedado** não fala com Brapi, CoinGecko nem BCB: fala com este servidor. As
+rotas em `web/app/api/app/` são autenticadas pelo **bearer token do próprio usuário**
+(`web/lib/auth/bearer.ts`) e devolvem o mesmo payload dos Server Components, convertido
+para JSON:
+
+| Rota | Devolve |
+| --- | --- |
+| `POST /api/app/quotes` | cotações em lote para `{ assets: [...], currency }` |
+| `GET /api/app/history` | série histórica de um ativo |
+| `GET /api/app/search` | busca de ativos (B3 + cripto) |
+| `GET /api/app/macro` | indicadores e juros do painel |
+| `GET /api/app/news` | manchetes por recorte |
+| `POST /api/app/alerts/check` | roda a verificação de alertas **do usuário** e envia os e-mails |
+
+`POST /api/app/alerts/check` existe por um motivo específico: é o que permite distribuir o
+executável **sem credencial de e-mail**. O servidor usa a mesma rotina do cron
+(`web/lib/alerts/run.ts`), então a trava atômica de `last_notified_at` vale para os dois
+caminhos e nenhum alerta gera dois e-mails.
+
+`web/proxy.ts` deixa passar as rotas `/api/app/*` sem consultar a sessão do cookie — o
+token do header é que identifica o usuário, e uma ida ao GoTrue por requisição só
+adicionaria latência.
+
 ## App desktop (`desktop/`)
 
 WPF em .NET 8, MVVM com CommunityToolkit, gráficos com LiveCharts.
@@ -230,8 +255,17 @@ dotnet run --project src/BolsaMonitor.Desktop -- --demo   # dados de demonstraç
 dotnet test src/BolsaMonitor.Core.Tests
 ```
 
-No modo demonstração não é necessário Supabase. Sem `--demo`, copie
-`src/BolsaMonitor.Desktop/appsettings.example.json` para `appsettings.json` e preencha as chaves.
+O modo demonstração não usa Supabase nem rede. O padrão da release é o **modo
+hospedado**: `appsettings.defaults.json` (versionado, só dados públicos) já aponta para
+`https://bolsa-monitor.vercel.app`, e o app consome `/api/app/*` com o token do próprio
+usuário. Nesse modo a release **não carrega chave de provider nenhuma** — nem Brapi, nem
+CoinGecko, nem Resend/SMTP; quem tem as credenciais é o servidor.
+
+Para rodar contra os provedores com chaves próprias (modo **direto**), deixe `ApiBaseUrl`
+vazio e copie `src/BolsaMonitor.Desktop/appsettings.example.json` para `appsettings.json`.
+Detalhes em [`desktop/README.md`](desktop/README.md).
+
+A cotação do dólar aparece no rodapé de todas as telas do desktop, inclusive no login.
 
 A tela **Mercado** também alterna a moeda de criptomoedas entre **Real** e **Dólar**;
 ativos da B3 permanecem em reais porque essa é a única cotação real negociada.
@@ -249,4 +283,6 @@ não tocam a rede. As manchetes abrem no navegador padrão.
 ## Testes
 
 - `web`: `npx tsc --noEmit` e `npm run build`.
-- `desktop`: `dotnet test src/BolsaMonitor.Core.Tests` (formatação, carteira, alertas, regras de alerta e de favoritos, parsing de RSS).
+- `desktop`: `dotnet test src/BolsaMonitor.Core.Tests` — 88 testes: formatação, carteira,
+  alertas, regras de alerta e de favoritos, parsing de RSS e o contrato JSON de
+  `/api/app/*` (`ApiJsonTests`).

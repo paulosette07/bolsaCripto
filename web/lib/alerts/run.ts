@@ -4,7 +4,7 @@ import { getQuotes } from '@/lib/market';
 import { toMarketErrorMessage } from '@/lib/market/http';
 import type { AssetRef } from '@/lib/market/types';
 import { getEmailSender, isEmailConfigured } from '@/lib/email';
-import type { AlertCondition } from '@/lib/types/database';
+import type { AlertCondition, AlertSentVia } from '@/lib/types/database';
 import { toNumber } from '@/lib/format';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -62,7 +62,20 @@ interface ProfileRecord {
 
 const MAX_ERRORS_REPORTED = 20;
 
-export async function runAlertCheck(): Promise<AlertRunSummary> {
+export interface AlertRunOptions {
+  /**
+   * Restringe a checagem a um usuário. Usado quando o **app desktop** dispara
+   * a verificação: ele só deve mexer nos próprios alertas, mesmo que a rota
+   * seja acessível a qualquer conta autenticada.
+   */
+  userId?: string;
+  /** Origem gravada em `alert_events.sent_via` (`cron` por padrão). */
+  sentVia?: AlertSentVia;
+}
+
+export async function runAlertCheck(options: AlertRunOptions = {}): Promise<AlertRunSummary> {
+  const sentVia: AlertSentVia = options.sentVia ?? 'cron';
+
   const summary: AlertRunSummary = {
     alertsChecked: 0,
     conditionsMet: 0,
@@ -74,12 +87,17 @@ export async function runAlertCheck(): Promise<AlertRunSummary> {
 
   const supabase = createAdminClient();
 
-  const { data: alerts, error: alertsError } = await supabase
+  const alertsQuery = supabase
     .from('price_alerts')
     .select('*')
     .eq('is_active', true)
     .order('created_at', { ascending: true })
     .limit(500);
+
+  // Sem `userId` a rodada é global (cron); com ele, é a checagem de uma conta.
+  const { data: alerts, error: alertsError } = options.userId
+    ? await alertsQuery.eq('user_id', options.userId)
+    : await alertsQuery;
 
   if (alertsError) {
     summary.errors.push(`Falha ao ler alertas: ${alertsError.message}`);
@@ -211,7 +229,7 @@ export async function runAlertCheck(): Promise<AlertRunSummary> {
         condition: alert.condition,
         target_price: targetPrice,
         price_at_trigger: quote.price,
-        sent_via: 'cron',
+        sent_via: sentVia,
         provider: null,
         status: 'failed',
         error_message: reason
@@ -248,7 +266,7 @@ export async function runAlertCheck(): Promise<AlertRunSummary> {
         condition: alert.condition,
         target_price: targetPrice,
         price_at_trigger: quote.price,
-        sent_via: 'cron',
+        sent_via: sentVia,
         provider: result.provider,
         status: 'sent',
         error_message: null
@@ -270,7 +288,7 @@ export async function runAlertCheck(): Promise<AlertRunSummary> {
         condition: alert.condition,
         target_price: targetPrice,
         price_at_trigger: quote.price,
-        sent_via: 'cron',
+        sent_via: sentVia,
         provider: null,
         status: 'failed',
         error_message: message

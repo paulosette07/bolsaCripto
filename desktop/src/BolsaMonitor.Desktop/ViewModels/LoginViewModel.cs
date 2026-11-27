@@ -18,10 +18,11 @@ public sealed partial class LoginViewModel : ObservableObject
     private readonly SupabaseGateway _gateway;
     private readonly AppOptions _options;
 
-    public LoginViewModel(SupabaseGateway gateway, AppOptions options)
+    public LoginViewModel(SupabaseGateway gateway, AppOptions options, RateTickerViewModel rateTicker)
     {
         _gateway = gateway;
         _options = options;
+        RateTicker = rateTicker;
 
         // Passa pela propriedade (e não pelo campo) para disparar o aviso de
         // configuração — escrever no campo deixava a caixa vazia na tela.
@@ -30,6 +31,12 @@ public sealed partial class LoginViewModel : ObservableObject
 
     /// <summary>Disparado quando a autenticação termina com sucesso.</summary>
     public event EventHandler? SignedIn;
+
+    /// <summary>
+    /// Faixa do dólar no rodapé desta janela: o visitante já vê a cotação antes
+    /// de ter conta. A rota `/api/fx` é pública justamente por isso.
+    /// </summary>
+    public RateTickerViewModel RateTicker { get; }
 
     [ObservableProperty]
     private string _email = string.Empty;

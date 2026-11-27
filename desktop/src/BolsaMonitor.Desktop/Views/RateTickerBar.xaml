@@ -1,0 +1,70 @@
+<UserControl x:Class="BolsaMonitor.Desktop.Views.RateTickerBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:BolsaMonitor.Desktop.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:RateTickerViewModel}"
+             d:DesignWidth="900"
+             d:DesignHeight="34">
+
+    <!--
+        Faixa fixa do dólar comercial.
+
+        Um único controle usado pela shell e pela tela de login: o número é o
+        mesmo nos dois lugares e não deve haver duas cópias do markup para
+        manter em sincronia. O DataContext esperado é RateTickerViewModel.
+    -->
+    <Border Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource LineBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="26,7"
+            ToolTip="{Binding DetailText}">
+
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <Border Background="{StaticResource SurfaceRaisedBrush}"
+                    BorderBrush="{StaticResource LineBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="5,1"
+                    Margin="0,0,9,0"
+                    VerticalAlignment="Center">
+                <TextBlock Text="US$"
+                           FontFamily="{StaticResource UiFont}"
+                           FontSize="9"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource InkMutedBrush}" />
+            </Border>
+
+            <TextBlock Text="Dólar comercial"
+                       Style="{StaticResource Caption}"
+                       VerticalAlignment="Center"
+                       Margin="0,0,9,0" />
+
+            <TextBlock Text="{Binding RateText}"
+                       Style="{StaticResource Numeric}"
+                       FontSize="13"
+                       VerticalAlignment="Center" />
+
+            <TextBlock Text="{Binding ChangeText}"
+                       Foreground="{Binding ChangeBrush}"
+                       FontFamily="{StaticResource NumericFont}"
+                       FontSize="11"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       Margin="8,0,0,0" />
+
+            <Border Width="1"
+                    Height="12"
+                    Background="{StaticResource LineBrush}"
+                    Margin="14,0,14,0"
+                    VerticalAlignment="Center" />
+
+            <TextBlock Text="{Binding DetailText}"
+                       Style="{StaticResource Caption}"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -67,7 +67,11 @@ public partial class MainWindow : Window
 
     private async void OnAlertTimerTick(object? sender, EventArgs e)
     {
-        await _viewModel.CheckAlertsAsync();
+        // A mesma cadência serve ao dólar: a faixa do rodapé relê o câmbio a
+        // cada cinco minutos, sem timer próprio.
+        await Task.WhenAll(
+            _viewModel.CheckAlertsAsync(),
+            _viewModel.RateTicker.RefreshAsync());
     }
 
     private void OnSignedOut(object? sender, EventArgs e)

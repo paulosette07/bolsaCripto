@@ -37,7 +37,7 @@ public sealed partial class ShellViewModel : ObservableObject
 {
     private readonly AppOptions _options;
     private readonly SupabaseGateway _gateway;
-    private readonly AlertMonitor _monitor;
+    private readonly IAlertRunner _monitor;
     private readonly DashboardViewModel _dashboard;
     private readonly MarketViewModel _market;
     private readonly PortfolioViewModel _portfolio;
@@ -46,7 +46,8 @@ public sealed partial class ShellViewModel : ObservableObject
     public ShellViewModel(
         AppOptions options,
         SupabaseGateway gateway,
-        AlertMonitor monitor,
+        IAlertRunner monitor,
+        RateTickerViewModel rateTicker,
         DashboardViewModel dashboard,
         MarketViewModel market,
         PortfolioViewModel portfolio,
@@ -55,6 +56,7 @@ public sealed partial class ShellViewModel : ObservableObject
         _options = options;
         _gateway = gateway;
         _monitor = monitor;
+        RateTicker = rateTicker;
         _dashboard = dashboard;
         _market = market;
         _portfolio = portfolio;
@@ -77,6 +79,9 @@ public sealed partial class ShellViewModel : ObservableObject
     public event EventHandler? SignedOut;
 
     public ObservableCollection<NavItem> NavItems { get; }
+
+    /// <summary>Faixa fixa do dólar, exibida no rodapé da shell.</summary>
+    public RateTickerViewModel RateTicker { get; }
 
     [ObservableProperty]
     private PageViewModel _currentPage;
@@ -118,11 +123,13 @@ public sealed partial class ShellViewModel : ObservableObject
 
         UserInitials = BuildInitials(UserName);
 
-        _alerts.SetEmailWarning(_options.IsEmailConfigured
-            ? null
-            : "E-mail não configurado: os alertas não serão enviados até você preencher ResendApiKey ou Smtp no appsettings.json.");
+        // No modo hospedado quem envia o e-mail é o servidor, então a ausência
+        // de Resend/SMTP aqui não é problema — avisar seria ruído.
+        _alerts.SetEmailWarning(!_options.UseHostedApi && !_options.IsEmailConfigured
+            ? "E-mail não configurado: os alertas não serão enviados até você preencher ResendApiKey ou Smtp no appsettings.json."
+            : null);
 
-        await CurrentPage.LoadAsync().ConfigureAwait(true);
+        await Task.WhenAll(RateTicker.RefreshAsync(), CurrentPage.LoadAsync()).ConfigureAwait(true);
     }
 
     [RelayCommand]

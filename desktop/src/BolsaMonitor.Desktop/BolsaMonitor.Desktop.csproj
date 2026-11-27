@@ -16,6 +16,15 @@
     <None Include="appsettings.example.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+
+    <!--
+      appsettings.defaults.json é versionado e contém só dados públicos
+      (ApiBaseUrl + URL/chave anon do Supabase). Carregado antes do
+      appsettings.json, que continua tendo a palavra final.
+    -->
+    <None Include="appsettings.defaults.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
@@ -38,8 +47,8 @@
     <Product>Bolsa Monitor</Product>
     <Company>Bolsa Monitor</Company>
     <Description>Monitor de cotações da B3 e criptomoedas, com carteira e alertas.</Description>
-    <Version>1.1.0</Version>
-    <FileVersion>1.1.0.0</FileVersion>
+    <Version>1.3.0</Version>
+    <FileVersion>1.3.0.0</FileVersion>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
   </PropertyGroup>
 

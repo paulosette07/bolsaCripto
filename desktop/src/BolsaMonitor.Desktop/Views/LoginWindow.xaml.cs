@@ -34,7 +34,14 @@ public partial class LoginWindow : Window
     /// <summary>Verdadeiro quando a janela fechou por login bem-sucedido.</summary>
     public bool Authenticated { get; private set; }
 
-    private void OnLoaded(object sender, RoutedEventArgs e) => PasswordInput.Focus();
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        PasswordInput.Focus();
+
+        // O dólar aparece antes de existir sessão: busca assim que a janela
+        // abre, sem bloquear o foco no campo de senha.
+        await _viewModel.RateTicker.RefreshAsync();
+    }
 
     private void OnPasswordChanged(object sender, RoutedEventArgs e)
     {

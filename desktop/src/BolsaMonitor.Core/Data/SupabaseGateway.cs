@@ -41,6 +41,44 @@ public sealed class SupabaseGateway
 
     public string? Email => _demo?.Email ?? _client?.Auth.CurrentUser?.Email;
 
+    /// <summary>
+    /// Token de acesso da sessão atual, para o modo hospedado.
+    ///
+    /// É o token **do próprio usuário** — o app o envia ao servidor do Bolsa
+    /// Monitor em `Authorization: Bearer`, e é assim que a release usa os dados
+    /// de mercado sem carregar nenhuma chave de provider.
+    /// `null` quando não há sessão (antes do login, ou depois de expirar).
+    /// </summary>
+    public async Task<string?> GetAccessTokenAsync(CancellationToken cancellationToken = default)
+    {
+        if (_client is null)
+        {
+            return null;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            var session = _client.Auth.CurrentSession;
+
+            if (!string.IsNullOrWhiteSpace(session?.AccessToken))
+            {
+                return session!.AccessToken;
+            }
+
+            // Sessão em memória vazia (app recém-aberto): relê o token gravado
+            // e deixa o SDK renovar se estiver vencido.
+            var restored = await _client.Auth.RetrieveSessionAsync().ConfigureAwait(false);
+
+            return string.IsNullOrWhiteSpace(restored?.AccessToken) ? null : restored!.AccessToken;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     public string? FullName
     {
         get

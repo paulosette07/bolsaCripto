@@ -15,14 +15,22 @@ import { getYahooSnapshot } from './yahoo';
  *
  * Se as duas falharem devolvemos `null` e quem chama mostra o valor sem
  * conversão — nunca inventamos uma taxa.
+ *
+ * A taxa também alimenta a faixa fixa de dólar do topo do app (web e desktop),
+ * por isso a resposta traz a variação contra o ponto anterior da mesma série.
  */
 
 export interface UsdBrlRate {
   /** Quantos reais vale 1 dólar. `null` quando nenhuma fonte respondeu. */
   rate: number | null;
+  /** Ponto anterior da série, base da variação. `null` quando não há. */
+  previousRate: number | null;
+  /** Variação percentual contra `previousRate`. `null` sem base de comparação. */
+  changePercent: number | null;
   /** Data de referência (ISO `YYYY-MM-DD`) quando a fonte informa. */
   referenceDate: string | null;
   source: 'bcb' | 'yahoo' | 'none';
+  /** Momento da consulta, em ISO. */
   fetchedAt: string;
 }
 
@@ -32,7 +40,18 @@ interface BcbPoint {
 }
 
 const BCB_USD_SELL_SERIES = 10813;
-const BCB_URL = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${BCB_USD_SELL_SERIES}/dados/ultimos/1?formato=json`;
+
+/**
+ * Dois pontos: o último é a taxa do dia, o penúltimo serve de base para a
+ * variação. Uma chamada só, sem inventar comparação com um número fixo.
+ */
+const BCB_URL = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${BCB_USD_SELL_SERIES}/dados/ultimos/2?formato=json`;
+
+/**
+ * 5 minutos — a mesma cadência do refresh das telas. Um pouco abaixo disso no
+ * cache evita servir um valor recém-vencido bem quando o cliente pergunta.
+ */
+const FX_REVALIDATE_SECONDS = 240;
 
 /** `25/11/2026` -> `2026-11-25`. */
 function bcbDateToIso(value: string | undefined): string | null {
@@ -50,7 +69,33 @@ function isPlausibleRate(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 1 && value < 20;
 }
 
-async function fetchFromBcb(): Promise<{ rate: number; referenceDate: string | null } | null> {
+function parseBcbValue(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  // O BCB publica "5,7487" (vírgula decimal).
+  const parsed = Number.parseFloat(value.trim().replace(',', '.'));
+
+  return isPlausibleRate(parsed) ? parsed : null;
+}
+
+/** Variação percentual entre o ponto atual e o anterior. */
+function percentChange(current: number, previous: number | null): number | null {
+  if (previous === null || previous <= 0) {
+    return null;
+  }
+
+  return ((current - previous) / previous) * 100;
+}
+
+interface SourceRate {
+  rate: number;
+  previousRate: number | null;
+  referenceDate: string | null;
+}
+
+async function fetchFromBcb(): Promise<SourceRate | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
 
@@ -58,7 +103,7 @@ async function fetchFromBcb(): Promise<{ rate: number; referenceDate: string | n
     const response = await fetch(BCB_URL, {
       headers: { accept: 'application/json' },
       signal: controller.signal,
-      next: { revalidate: 1800 }
+      next: { revalidate: FX_REVALIDATE_SECONDS }
     });
 
     if (!response.ok) {
@@ -66,14 +111,22 @@ async function fetchFromBcb(): Promise<{ rate: number; referenceDate: string | n
     }
 
     const points = (await response.json()) as BcbPoint[];
-    const latest = points[points.length - 1];
-    const parsed = latest?.valor ? Number.parseFloat(latest.valor) : Number.NaN;
 
-    if (!isPlausibleRate(parsed)) {
+    if (!Array.isArray(points) || points.length === 0) {
       return null;
     }
 
-    return { rate: parsed, referenceDate: bcbDateToIso(latest?.data) };
+    const latest = points[points.length - 1];
+    const rate = parseBcbValue(latest?.valor);
+
+    if (rate === null) {
+      return null;
+    }
+
+    // Fim de semana/feriado: o BCB devolve um ponto só e não há base de variação.
+    const previous = points.length > 1 ? parseBcbValue(points[points.length - 2]?.valor) : null;
+
+    return { rate, previousRate: previous, referenceDate: bcbDateToIso(latest?.data) };
   } catch {
     return null;
   } finally {
@@ -81,7 +134,7 @@ async function fetchFromBcb(): Promise<{ rate: number; referenceDate: string | n
   }
 }
 
-async function fetchFromYahoo(): Promise<{ rate: number; referenceDate: string | null } | null> {
+async function fetchFromYahoo(): Promise<SourceRate | null> {
   try {
     const snapshot = await getYahooSnapshot('BRL=X');
 
@@ -91,6 +144,10 @@ async function fetchFromYahoo(): Promise<{ rate: number; referenceDate: string |
 
     return {
       rate: snapshot.price,
+      previousRate:
+        typeof snapshot.previousClose === 'number' && isPlausibleRate(snapshot.previousClose)
+          ? snapshot.previousClose
+          : null,
       referenceDate: snapshot.updatedAt.slice(0, 10)
     };
   } catch {
@@ -98,21 +155,45 @@ async function fetchFromYahoo(): Promise<{ rate: number; referenceDate: string |
   }
 }
 
-/** Taxa de câmbio USD -> BRL. Falha das duas fontes devolve `rate: null`. */
+/**
+ * Taxa de câmbio USD -> BRL com a variação do dia.
+ * Falha das duas fontes devolve `rate: null`.
+ */
 export async function getUsdBrlRate(): Promise<UsdBrlRate> {
   const fetchedAt = new Date().toISOString();
 
   const bcb = await fetchFromBcb();
 
   if (bcb) {
-    return { rate: bcb.rate, referenceDate: bcb.referenceDate, source: 'bcb', fetchedAt };
+    return {
+      rate: bcb.rate,
+      previousRate: bcb.previousRate,
+      changePercent: percentChange(bcb.rate, bcb.previousRate),
+      referenceDate: bcb.referenceDate,
+      source: 'bcb',
+      fetchedAt
+    };
   }
 
   const yahoo = await fetchFromYahoo();
 
   if (yahoo) {
-    return { rate: yahoo.rate, referenceDate: yahoo.referenceDate, source: 'yahoo', fetchedAt };
+    return {
+      rate: yahoo.rate,
+      previousRate: yahoo.previousRate,
+      changePercent: percentChange(yahoo.rate, yahoo.previousRate),
+      referenceDate: yahoo.referenceDate,
+      source: 'yahoo',
+      fetchedAt
+    };
   }
 
-  return { rate: null, referenceDate: null, source: 'none', fetchedAt };
+  return {
+    rate: null,
+    previousRate: null,
+    changePercent: null,
+    referenceDate: null,
+    source: 'none',
+    fetchedAt
+  };
 }

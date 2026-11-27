@@ -41,6 +41,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(recoveryUrl);
   }
 
+  const { pathname } = request.nextUrl;
+
+  // API do app Windows: autentica por `Authorization: Bearer`, não por cookie.
+  // Sem este atalho cada requisição pagaria uma ida ao GoTrue que a própria
+  // rota já faz — e a sessão de cookie não tem nada a ver com ela.
+  if (pathname.startsWith('/api/app/')) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey, {
@@ -72,7 +81,6 @@ export async function proxy(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
   const isProtected = PROTECTED_ROUTES.some((route) => startsWithRoute(pathname, route));
   const isAuthRoute = AUTH_ROUTES.some((route) => startsWithRoute(pathname, route));
 

@@ -21,7 +21,7 @@ public sealed record AlertRunSummary(
 /// alerta com UPDATE condicional → enviar → registrar `alert_events`. Se o
 /// envio falhar, o claim é desfeito para a próxima rodada tentar de novo.
 /// </summary>
-public sealed class AlertMonitor
+public sealed class AlertMonitor : IAlertRunner
 {
     private readonly IAlertRepository _alerts;
     private readonly IMarketService _market;

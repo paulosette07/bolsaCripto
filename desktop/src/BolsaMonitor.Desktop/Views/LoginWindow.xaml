@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:BolsaMonitor.Desktop.ViewModels"
+        xmlns:views="clr-namespace:BolsaMonitor.Desktop.Views"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=vm:LoginViewModel}"
         Title="Bolsa Monitor — Entrar"
@@ -20,6 +21,10 @@
             <ColumnDefinition Width="420" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
         <!-- Painel de marca -->
         <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
@@ -87,7 +92,7 @@
         </Border>
 
         <!-- Formulário -->
-        <Grid Grid.Column="1" Margin="48,32,48,32">
+        <Grid Grid.Column="1" Grid.Row="0" Margin="48,32,48,32">
             <StackPanel VerticalAlignment="Center" MaxWidth="380">
 
                 <TextBlock Text="Entrar na conta" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
@@ -147,5 +152,13 @@
                            Margin="0,18,0,0" />
             </StackPanel>
         </Grid>
+
+        <!--
+            Mesma faixa do dólar da shell: quem ainda não entrou também vê a
+            cotação. A rota que a alimenta é pública, então não depende de login.
+        -->
+        <views:RateTickerBar Grid.Row="1"
+                             Grid.ColumnSpan="2"
+                             DataContext="{Binding RateTicker}" />
     </Grid>
 </Window>
