@@ -48,9 +48,16 @@ public sealed partial class AlertsViewModel : PageViewModel
 
     private readonly IAlertRepository _alerts;
     private readonly IMarketService _market;
-    private readonly AlertMonitor _monitor;
+    private readonly IAlertRunner _monitor;
 
-    public AlertsViewModel(IAlertRepository alerts, IMarketService market, AlertMonitor monitor)
+    /// <summary>
+    /// Recebe <see cref="IAlertRunner"/>, não o <see cref="AlertMonitor"/> concreto:
+    /// no modo hospedado (padrão da release) quem roda a verificação é o servidor
+    /// (<see cref="BolsaMonitor.Core.Api.ApiAlertRunner"/>) e o monitor local nem é
+    /// registrado no container — pedir o tipo concreto quebrava a shell logo após
+    /// o login.
+    /// </summary>
+    public AlertsViewModel(IAlertRepository alerts, IMarketService market, IAlertRunner monitor)
     {
         _alerts = alerts;
         _market = market;

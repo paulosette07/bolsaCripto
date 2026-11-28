@@ -248,6 +248,12 @@ adicionaria latência.
 
 WPF em .NET 8, MVVM com CommunityToolkit, gráficos com LiveCharts.
 
+**Release pronta para baixar:** pegue `BolsaMonitor-win-x64-<versão>.zip` em
+[Releases](https://github.com/paulosette07/bolsaCripto/releases), extraia e execute
+`BolsaMonitor.exe`. O login é o **mesmo do site** (e-mail e senha) e não há nada para
+configurar — o pacote não leva chave de provider nem credencial de e-mail. Instruções
+completas no `LEIA-ME.txt` dentro do `.zip`.
+
 ```bash
 cd desktop
 dotnet build BolsaMonitor.slnx

@@ -1,3 +1,66 @@
+# Versão 1.3.2 — o app baixado abre, loga e mostra os dados
+
+## 1. A correção que faltava para a release funcionar
+
+A 1.3.0 deixou o desktop em **modo hospedado**, mas o app **fechava logo depois do login**:
+
+```
+Não foi possível iniciar o Bolsa Monitor.
+Unable to resolve service for type 'BolsaMonitor.Core.Alerts.AlertMonitor'
+while attempting to activate 'BolsaMonitor.Desktop.ViewModels.AlertsViewModel'.
+```
+
+A causa era uma dependência concreta onde deveria haver uma interface. `AlertsViewModel` pedia
+`AlertMonitor` (o monitor local, que cota e envia e-mail dentro do processo). No modo hospedado
+quem faz isso é o servidor, então o container registra `IAlertRunner` → `ApiAlertRunner` e **não**
+registra `AlertMonitor`. A shell injeta `AlertsViewModel` na abertura, então o erro aparecia
+assim que a sessão era restaurada — antes de qualquer tela.
+
+`AlertsViewModel` agora recebe `IAlertRunner`, igual à `ShellViewModel`. Os três modos
+(hospedado, direto e `--demo`) registram essa interface, então o mesmo código serve para todos.
+
+Isso passou despercebido porque a 1.3.0 só tinha sido verificada nas rotas HTTP (com um token
+real), não **pelo executável**. Esta versão foi verificada pelo app publicado: conta criada no
+mesmo Supabase da web, login de verdade e painel na tela (ver item 4).
+
+## 2. Instruções dentro do pacote
+
+`desktop/LEIA-ME.txt` agora é versionado e copiado para a saída do build, então o `.zip` sai com
+ele. Diz o essencial: extraia, execute `BolsaMonitor.exe`, entre com a **mesma conta do site**
+(`https://bolsa-monitor.vercel.app`), o que o app guarda no computador e o que fazer nos erros
+comuns (`E-mail ou senha incorretos`, `Confirme seu e-mail`, sessão expirada).
+
+## 3. Nenhum segredo no pacote
+
+O `.zip` leva apenas `ApiBaseUrl`, a URL do Supabase e a chave **publishable** (a mesma que vai
+no navegador, limitada por RLS). Varredura dos 532 arquivos do pacote contra os valores reais de
+`SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` e `VERCEL_OIDC_TOKEN`: **nenhuma ocorrência**. Também
+não há `BrapiToken`, `CoinGeckoApiKey`, `ResendApiKey` nem SMTP nos defaults, e o
+`appsettings.json` local (o arquivo de quem desenvolve) não entra no publish.
+
+## 4. Como foi verificado
+
+- `dotnet test desktop/src/BolsaMonitor.Core.Tests` — **88/88**.
+- Conta real criada no Supabase da web e login pelo `POST /auth/v1/token?grant_type=password`
+  usando exatamente a chave que vai no pacote: token válido.
+- Com esse token: `POST /api/app/quotes` (8 chaves), `GET /api/app/macro`, `/news`, `/search`
+  (14 resultados) e `POST /api/app/alerts/check` — todos OK.
+- Executável publicado, sem nenhuma sessão gravada (máquina limpa): abre a tela de login já com
+  a faixa do dólar (`US$ 1 = R$ 5,54 · -3,51% · Banco Central`) e **sem** aviso de configuração.
+- Executável publicado, com a sessão da conta de teste: entra direto no **Painel**, com dólar,
+  euro, ouro, Ibovespa, patrimônio, resultado, carteira e o gráfico do PETR4 vindos do servidor.
+
+## 5. Download e uso
+
+1. Baixe `BolsaMonitor-win-x64-1.3.2.zip` (104 MB) na seção de assets abaixo.
+2. Extraia em uma pasta e execute `BolsaMonitor.exe` (self-contained: não precisa instalar o .NET).
+3. Entre com a conta do site. Não é preciso criar arquivo de configuração.
+
+Carteira, favoritos e alertas continuam sendo os mesmos da versão web — é a mesma conta, no
+mesmo banco.
+
+---
+
 # Versão 1.3.0 — o app desktop roda sem nenhum segredo embutido
 
 ## 1. Release do desktop em **modo hospedado**

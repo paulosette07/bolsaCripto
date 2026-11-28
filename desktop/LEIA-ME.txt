@@ -1,0 +1,56 @@
+BOLSA MONITOR - APLICATIVO PARA WINDOWS 10/11 (64 BITS)
+======================================================
+
+1. COMO ABRIR
+-------------
+Extraia o arquivo .zip em uma pasta e execute "BolsaMonitor.exe".
+Nao rode de dentro do .zip e nao e preciso instalar o .NET: o pacote e
+self-contained.
+
+2. COMO ENTRAR
+--------------
+Use a MESMA CONTA do site https://bolsa-monitor.vercel.app (e-mail e senha).
+Nao existe cadastro separado para o desktop: a conta e uma so, e a carteira,
+os favoritos e os alertas sao os mesmos nas duas aplicacoes.
+
+  - Se voce ainda nao tem conta, crie em https://bolsa-monitor.vercel.app/cadastro
+    e confirme o e-mail antes de entrar aqui.
+  - Se esqueceu a senha, recupere pelo site e depois entre no app.
+
+Nao e preciso configurar nada. O app ja vem apontando para o servidor do
+Bolsa Monitor e para o Supabase do site (arquivo appsettings.defaults.json,
+com dados publicos apenas).
+
+3. O QUE O APP NAO CARREGA
+--------------------------
+Nenhuma chave de servico: nem token da Brapi, nem chave da CoinGecko, nem
+credencial de e-mail (Resend/SMTP), nem chave de servico do Supabase.
+Cotacoes, indicadores e noticias vem do servidor do Bolsa Monitor, e o envio
+de e-mail dos alertas tambem e feito por ele. O app se identifica com o token
+da sua sessao.
+
+4. O QUE E SALVO NO SEU COMPUTADOR
+----------------------------------
+  - a sessao do Supabase (token de acesso e de renovacao), para nao pedir
+    senha a cada abertura;
+  - nada mais. Carteira, favoritos e alertas ficam na sua conta, no banco.
+
+Ao clicar em "Sair" a sessao gravada e apagada.
+
+5. MODOS ALTERNATIVOS (opcional)
+--------------------------------
+  --demo       abre com dados ficticios, sem rede e sem login.
+  modo direto  crie um appsettings.json ao lado do executavel com
+               "ApiBaseUrl": "" e as chaves dos provedores. Veja
+               appsettings.example.json.
+
+6. PROBLEMAS COMUNS
+-------------------
+  "E-mail ou senha incorretos"   confira a senha no site; a conta e a mesma.
+  "Confirme seu e-mail"          abra o link enviado no cadastro (veja o spam).
+  "Nao foi possivel conectar"    verifique a internet; o app precisa falar com
+                                https://bolsa-monitor.vercel.app e com o Supabase.
+  Sessao expirada                entre novamente; o app volta para o login.
+
+Dados de mercado por Brapi, CoinGecko, Yahoo, BCB e RSS publicos.
+Este aplicativo nao faz recomendacao de investimento.
